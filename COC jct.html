@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f2">
+  <title>Kukurantumi Church Of Christ Youth | Dashboard</title>
+  <script>
+    (() => {
+      const key = "kukurantumi-theme";
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const readMode = () => {
+        try {
+          const mode = localStorage.getItem(key);
+          return ["system", "light", "dark"].includes(mode) ? mode : "system";
+        } catch { return "system"; }
+      };
+      const applyMode = mode => {
+        const theme = mode === "system" ? (media.matches ? "dark" : "light") : mode;
+        document.documentElement.dataset.theme = theme;
+        document.querySelectorAll("[data-theme-logo]").forEach(logo => {
+          logo.src = theme === "dark" ? logo.dataset.darkSrc : logo.dataset.lightSrc;
+        });
+      };
+      applyMode(readMode());
+      window.addEventListener("DOMContentLoaded", () => {
+        applyMode(readMode());
+        const select = document.getElementById("theme-select");
+        if (!select) return;
+        select.value = readMode();
+        select.addEventListener("change", () => {
+          try { localStorage.setItem(key, select.value); } catch {}
+          applyMode(select.value);
+        });
+        media.addEventListener("change", () => { if (readMode() === "system") applyMode("system"); });
+      });
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #202921;
+      --muted: #737b72;
+      --line: #e5e8e1;
+      --paper: #fff;
+      --canvas: #f6f7f2;
+      --forest: #244c3b;
+      --forest-dark: #193a2c;
+      --leaf: #dce9d8;
+      --gold: #d7a94b;
+      --rose: #a34e46;
+      --shadow: 0 12px 32px rgba(32, 41, 33, .045);
+      --control-bg: #fff;
+      --topbar-bg: rgba(246,247,242,.95);
+      --table-head: #fafbf8;
+      --event-date: #f1f3ed;
+      --person-bg: #edf1e9;
+      --status-bg: #e8f0e4;
+      --status-ink: #35583d;
+      --status-pending-bg: #f8efd9;
+      --status-pending-ink: #826522;
+      --status-inactive-bg: #f5e6e3;
+      --status-inactive-ink: #8a4038;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #edf2ec;
+      --muted: #aab7ac;
+      --line: #3b4b40;
+      --paper: #202b24;
+      --canvas: #141d17;
+      --forest: #6fa17c;
+      --forest-dark: #17241b;
+      --leaf: #2b3b30;
+      --gold: #e2bd70;
+      --rose: #e09a90;
+      --shadow: 0 12px 32px rgba(0, 0, 0, .24);
+      --control-bg: #19241d;
+      --topbar-bg: rgba(20,29,23,.96);
+      --table-head: #29362d;
+      --event-date: #2b3b30;
+      --person-bg: #2b3b30;
+      --status-bg: #283a2c;
+      --status-ink: #b7d2b2;
+      --status-pending-bg: #453b22;
+      --status-pending-ink: #ecd28e;
+      --status-inactive-bg: #472d2a;
+      --status-inactive-ink: #edaaa0;
+    }
+    * { box-sizing: border-box; }
+    body { visibility: hidden; margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.5 "Segoe UI", sans-serif; }
+    body.authenticated { visibility: visible; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app-shell { min-height: 100vh; }
+    .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 4; display: flex; width: 248px; flex-direction: column; padding: 27px 17px 18px; background: var(--forest-dark); color: #f4f6ef; }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 10px 30px; }
+    .brand-mark { display: block; width: 58px; height: auto; flex: 0 0 auto; border-radius: 3px; background: #fff; }
+    :root[data-theme="dark"] .brand-mark { background: transparent; }
+    .brand-name { font: 18px/1.1 Georgia, serif; letter-spacing: 0; }
+    .brand-subtitle { margin-top: 4px; color: #bdcabe; font-size: 10px; letter-spacing: 1.1px; text-transform: uppercase; }
+    .nav-label { padding: 12px 12px 8px; color: #9eafa0; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-link { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 0 12px; border: 0; border-radius: 5px; background: transparent; color: #d2ddd2; text-align: left; }
+    .nav-link:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .nav-link[aria-current="page"] { background: #315a47; color: #fff; }
+    .nav-glyph { display: grid; width: 20px; place-items: center; color: #bdcabe; font: 17px Georgia, serif; }
+    .nav-link[aria-current="page"] .nav-glyph { color: #eed18a; }
+    .sidebar-bottom { margin-top: auto; border-top: 1px solid rgba(255,255,255,.13); padding: 18px 10px 0; color: #bdcabe; font-size: 12px; }
+    .online-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #9fc69a; }
+    .main { min-height: 100vh; margin-left: 248px; }
+    .topbar { position: sticky; top: 0; z-index: 3; display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); padding: 12px 36px; background: var(--topbar-bg); backdrop-filter: blur(12px); }
+    .crumb { color: var(--muted); font-size: 12px; }
+    .crumb strong { color: var(--ink); font-weight: 600; }
+    .top-actions { display: flex; align-items: center; gap: 16px; }
+    .theme-control { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+    .theme-control select { min-height: 34px; border: 1px solid var(--line); border-radius: 4px; padding: 5px 26px 5px 8px; background: var(--control-bg); color: var(--ink); }
+    .role-control { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .role-control select { max-width: 160px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 28px 8px 10px; background: var(--control-bg); color: var(--ink); }
+    .user-name { color: var(--ink); font-size: 12px; font-weight: 600; }
+    .avatar { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: #e7d9b7; color: #4b422d; font: 13px Georgia, serif; }
+    .content { width: min(1360px, 100%); margin: 0 auto; padding: 31px 36px 48px; }
+    .page-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+    h1 { margin: 0; font: 32px/1.15 Georgia, serif; letter-spacing: 0; }
+    .page-description { margin: 7px 0 0; color: var(--muted); }
+    .eyebrow { margin-bottom: 7px; color: #7a806f; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+    .button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--forest); border-radius: 4px; padding: 0 14px; background: var(--forest); color: #fff; font-weight: 600; }
+    .button:hover { background: var(--forest-dark); }
+    .button.secondary { border-color: var(--line); background: var(--control-bg); color: var(--ink); }
+    .button.secondary:hover { border-color: #a9b1a6; }
+    .button:focus-visible, select:focus-visible, input:focus-visible, .nav-link:focus-visible { outline: 3px solid #d7a94b; outline-offset: 2px; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .stat, .panel { border: 1px solid var(--line); border-radius: 5px; background: var(--paper); box-shadow: var(--shadow); }
+    .stat { min-height: 127px; padding: 17px 18px; }
+    .stat-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; }
+    .stat-mark { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 50%; background: var(--leaf); color: var(--forest); font: 16px Georgia, serif; }
+    .stat-value { margin-top: 14px; font: 27px/1 Georgia, serif; }
+    .stat-note { margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .stat-note .up { color: var(--forest); font-weight: 700; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(275px, .8fr); gap: 18px; }
+    .panel { overflow: hidden; }
+    .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); padding: 16px 19px; }
+    .panel-heading h2 { margin: 0; font: 19px Georgia, serif; }
+    .panel-heading p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+    .quiet-link { border: 0; padding: 5px 0; background: transparent; color: var(--forest); font-size: 12px; font-weight: 700; }
+    .quiet-link:hover { text-decoration: underline; }
+    .chart-wrap { padding: 18px 20px 13px; }
+    .chart-summary { display: flex; align-items: baseline; gap: 9px; }
+    .chart-summary strong { font: 28px Georgia, serif; }
+    .chart-summary span { color: var(--muted); font-size: 11px; }
+    .chart { display: grid; height: 174px; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: end; gap: 12px; margin-top: 16px; border-bottom: 1px solid var(--line); padding: 0 3px; }
+    .bar-group { display: grid; height: 100%; grid-template-rows: 1fr 19px; justify-items: center; align-items: end; gap: 8px; }
+    .bar-pair { display: flex; width: 100%; height: 100%; align-items: end; justify-content: center; gap: 5px; }
+    .bar { width: min(19px, 35%); min-height: 5px; border-radius: 3px 3px 0 0; background: #a9c2a4; }
+    .bar:nth-child(2) { background: var(--gold); }
+    .bar-label { color: var(--muted); font-size: 10px; }
+    .legend { display: flex; gap: 16px; margin-top: 13px; color: var(--muted); font-size: 10px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 8px; height: 8px; border-radius: 2px; background: #a9c2a4; }
+    .legend span + span i { background: var(--gold); }
+    .events { padding: 4px 19px; }
+    .event { display: grid; grid-template-columns: 48px 1fr; gap: 12px; border-bottom: 1px solid var(--line); padding: 14px 0; }
+    .event:last-child { border-bottom: 0; }
+    .event-date { display: grid; width: 44px; height: 48px; align-content: center; justify-items: center; border-radius: 4px; background: var(--event-date); color: var(--forest); }
+    .event-date b { font: 18px/1 Georgia, serif; }
+    .event-date small { margin-top: 3px; font-size: 9px; font-weight: 700; letter-spacing: .8px; }
+    .event h3 { margin: 1px 0 3px; font-size: 12px; }
+    .event p { margin: 0; color: var(--muted); font-size: 11px; }
+    .table-panel { margin-top: 18px; }
+    .table-tools { display: flex; align-items: center; gap: 8px; }
+    .search { width: 190px; min-height: 34px; border: 1px solid var(--line); border-radius: 4px; padding: 0 10px; background: var(--control-bg); color: var(--ink); }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { background: var(--table-head); color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
+    th, td { border-bottom: 1px solid var(--line); padding: 12px 18px; white-space: nowrap; }
+    td { font-size: 12px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .person { display: flex; align-items: center; gap: 9px; }
+    .person-initial { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--person-bg); color: var(--forest); font: 12px Georgia, serif; }
+    .person small { display: block; color: var(--muted); font-size: 10px; }
+    .status { display: inline-block; border-radius: 20px; padding: 4px 8px; background: var(--status-bg); color: var(--status-ink); font-size: 10px; font-weight: 700; }
+    .status.pending { background: var(--status-pending-bg); color: var(--status-pending-ink); }
+    .status.inactive { background: var(--status-inactive-bg); color: var(--status-inactive-ink); }
+    .empty-state { padding: 28px 18px; color: var(--muted); text-align: center; }
+    .section-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .detail-list { margin: 0; padding: 4px 19px; list-style: none; }
+    .detail-list li { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); padding: 14px 0; }
+    .detail-list li:last-child { border-bottom: 0; }
+    .detail-list small { display: block; color: var(--muted); }
+    .amount { font-weight: 700; }
+    .amount.positive { color: var(--forest); }
+    .settings-copy { padding: 18px 19px; color: var(--muted); }
+    .settings-copy strong { color: var(--ink); }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 19px; }
+    .field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
+    .field.full { grid-column: 1 / -1; }
+    .field input, .field select, .field textarea { width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; background: var(--control-bg); color: var(--ink); }
+    .field textarea { min-height: 100px; resize: vertical; }
+    .form-grid .button { justify-self: start; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 10px 16px 17px; }
+    .calendar-weekday, .calendar-day { display: grid; min-height: 48px; place-items: center; }
+    .calendar-weekday { min-height: 31px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .calendar-day { position: relative; width: 100%; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 12px; }
+    button.calendar-day { cursor: pointer; }
+    .calendar-day.today { color: var(--forest); font-weight: 800; }
+    .calendar-day.has-event::after { position: absolute; bottom: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--gold); content: ""; }
+    .calendar-day.empty { border-top-color: transparent; }
+    .calendar-toolbar { display: flex; align-items: center; gap: 8px; }
+    .calendar-toolbar strong { min-width: 132px; text-align: center; }
+    .icon-button { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--control-bg); color: var(--ink); }
+    .icon-button:hover { border-color: #a9b1a6; }
+    .announcement-copy { padding: 14px 19px; }
+    .announcement-copy p { margin: 6px 0 0; color: var(--muted); white-space: pre-wrap; }
+    .announcement-meta { color: var(--muted); font-size: 10px; }
+    .notice { position: fixed; right: 22px; bottom: 22px; z-index: 8; max-width: min(380px, calc(100vw - 32px)); transform: translateY(12px); border-radius: 4px; padding: 12px 16px; background: var(--forest-dark); color: white; box-shadow: 0 8px 24px #0002; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+    .notice.show { transform: translateY(0); opacity: 1; }
+    .mobile-brand { display: none; }
+    @media (max-width: 1000px) {
+      .sidebar { width: 218px; }
+      .main { margin-left: 218px; }
+      .topbar, .content { padding-right: 24px; padding-left: 24px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .sidebar { position: static; width: 100%; padding: 12px 15px 10px; }
+      .brand { padding: 0 5px 12px; }
+      .brand-mark { width: 52px; }
+      .brand-name { font-size: 16px; }
+      .brand-subtitle { font-size: 9px; }
+      .nav-label, .sidebar-bottom { display: none; }
+      .nav-list { display: flex; overflow-x: auto; gap: 5px; padding-bottom: 1px; }
+      .nav-link { width: auto; min-height: 36px; flex: 0 0 auto; gap: 7px; padding: 0 10px; font-size: 12px; }
+      .nav-glyph { width: auto; font-size: 14px; }
+      .main { margin-left: 0; }
+      .topbar { position: static; min-height: 59px; padding: 10px 16px; }
+      .crumb { display: none; }
+      .top-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+      .role-control { gap: 7px; }
+      .role-control select { max-width: 145px; }
+      .content { padding: 24px 15px 35px; }
+      .page-heading { align-items: start; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+      h1 { font-size: 28px; }
+      .stats { gap: 9px; }
+      .stat { min-height: 112px; padding: 13px; }
+      .stat-value { font-size: 24px; }
+      .dashboard-grid, .section-layout { gap: 12px; }
+      .form-grid { padding: 14px; }
+      .calendar-grid { padding-right: 9px; padding-left: 9px; }
+      .calendar-day { min-height: 42px; }
+      .chart { gap: 7px; }
+      .bar-pair { gap: 3px; }
+      .bar { width: 30%; }
+      .panel-heading { padding: 14px; }
+      .table-panel { margin-top: 12px; }
+      .table-tools { width: 100%; }
+      .search { width: 100%; }
+      .page-heading .button { min-height: 36px; }
+      th, td { padding: 11px 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <img class="brand-mark" src="/assets/church-logo.svg" data-theme-logo data-light-src="/assets/church-logo.svg" data-dark-src="/assets/church-logo-dark.svg" alt="Church of Christ logo">
+        <div><div class="brand-name">Kukurantumi Church Of Christ Youth</div><div class="brand-subtitle">Youth Ministry</div></div>
+      </div>
+      <div class="nav-label">Workspace</div>
+      <nav class="nav-list" id="navigation"></nav>
+      <div class="sidebar-bottom"><span class="online-dot"></span>Office workspace</div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="crumb">Kukurantumi Church Of Christ Youth <span aria-hidden="true">/</span> <strong id="breadcrumb">Overview</strong></div>
+        <div class="top-actions">
+          <label class="theme-control">Theme<select id="theme-select" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <span class="user-name" id="current-user-name"></span>
+          <div class="avatar" id="user-avatar" aria-label="Current role">AD</div>
+          <button class="button secondary" id="logout-button" type="button">Sign out</button>
+        </div>
+      </header>
+      <div class="content" id="page-content" aria-live="polite"></div>
+    </main>
+  </div>
+  <div class="notice" id="notice" role="status" aria-live="polite"></div>
+  <script>
+    const rolePages = {
+      Admin: ["Home", "Members", "Attendance", "Announcements", "Calendar", "Finances", "Reports", "Settings"],
+      Secretary: ["Home", "Members", "Attendance", "Announcements", "Calendar", "Reports"],
+      "Financial Secretary": ["Home", "Dues", "Finances", "Reports"],
+      Treasurer: ["Home", "Dues", "Finances", "Reports"]
+    };
+    const glyphs = { Home: "⌂", Members: "♙", Attendance: "✓", Announcements: "✉", Calendar: "▦", Dues: "₵", Finances: "₵", Reports: "▤", Settings: "⚙" };
+    let members = [];
+    let transactions = [];
+    let dues = [];
+    let announcements = [];
+    let calendarEvents = [];
+    let attendanceRecords = [];
+    let staffUsers = [];
+    const descriptions = {
+      Home: "A clear view of your church community this week.", Members: "Keep member details and ministry connections up to date.",
+      Attendance: "Review weekly participation across services and groups.", Dues: "Track member dues, how much has been paid, and who still owes.", Finances: "Track giving, expenses, and items awaiting review.",
+      Announcements: "Prepare and share updates with the church community.", Calendar: "Keep services, ministry meetings, and church events in view.",
+      Reports: "Prepare a snapshot of church activity and operations.", Settings: "Manage workspace preferences and role access."
+    };
+    let currentRole = "";
+    let currentUser = null;
+    let currentPage = "Home";
+    let calendarMonth = new Date(2026, 9, 1);
+    let noticeTimer;
+
+    async function api(path, options = {}) {
+      const response = await fetch(`/api${path}`, {
+        ...options,
+        headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers }
+      });
+      if (response.status === 401) {
+        location.replace("/");
+        throw new Error("Please sign in again.");
+      }
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "The request could not be completed.");
+      }
+      return response.status === 204 ? null : response.json();
+    }
+
+    function displayDate(value, options = { month: "short", day: "2-digit", year: "numeric" }) {
+      return new Date(value).toLocaleDateString("en-US", options);
+    }
+
+    function formatCurrency(value) {
+      return `GHS ${Number(value).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    async function loadWorkspaceData() {
+      const requests = [];
+      if (["Admin", "Secretary", "Financial Secretary"].includes(currentRole)) {
+        requests.push(api("/members").then(data => { members = data; }));
+      }
+      if (["Admin", "Secretary"].includes(currentRole)) {
+        requests.push(api("/attendance").then(data => { attendanceRecords = data; }));
+        requests.push(api("/announcements").then(data => { announcements = data; }));
+      }
+      if (["Admin", "Secretary", "Financial Secretary", "Treasurer"].includes(currentRole)) requests.push(api("/events").then(data => { calendarEvents = data.map(item => ({ ...item, date: new Date(item.date).toISOString().slice(0, 10) })); }));
+      if (["Admin", "Financial Secretary", "Treasurer"].includes(currentRole)) {
+        requests.push(api("/transactions").then(data => { transactions = data; }));
+        requests.push(api("/dues").then(data => { dues = data; }));
+      }
+      if (currentRole === "Admin") requests.push(api("/users").then(data => { staffUsers = data; }));
+      await Promise.all(requests);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>\"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
+    }
+
+    function setNotice(message) {
+      const notice = document.getElementById("notice");
+      notice.textContent = message;
+      notice.classList.add("show");
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => notice.classList.remove("show"), 2600);
+    }
+
+    function renderNav() {
+      document.getElementById("navigation").innerHTML = rolePages[currentRole].map(page =>
+        `<button class="nav-link" type="button" data-page="${page}" aria-current="${page === currentPage ? "page" : "false"}"><span class="nav-glyph" aria-hidden="true">${glyphs[page]}</span>${page}</button>`
+      ).join("");
+      document.querySelectorAll(".nav-link").forEach(button => button.addEventListener("click", () => {
+        currentPage = button.dataset.page;
+        renderNav();
+        renderPage();
+      }));
+    }
+
+    function heading(title, action = "") {
+      return `<div class="page-heading"><div><div class="eyebrow">${currentRole} workspace</div><h1>${title}</h1><p class="page-description">${descriptions[currentPage]}</p></div>${action}</div>`;
+    }
+
+    function stat(label, value, note, glyph, trend = "") {
+      return `<article class="stat"><div class="stat-top"><span>${label}</span><span class="stat-mark" aria-hidden="true">${glyph}</span></div><div class="stat-value">${value}</div><div class="stat-note">${trend ? `<span class="up">${trend}</span> ` : ""}${note}</div></article>`;
+    }
+
+    function memberTable() {
+      return `<div class="panel table-panel"><div class="panel-heading"><div><h2>Church directory</h2><p>${members.length} member records</p></div><div class="table-tools"><input class="search" id="member-search" type="search" placeholder="Search members" aria-label="Search members"></div></div><div class="table-scroll"><table><thead><tr><th>Member</th><th>Ministry</th><th>Joined</th><th>Status</th></tr></thead><tbody id="member-rows">${members.map(member => `<tr data-search="${escapeHtml(`${member.name} ${member.email} ${member.group}`).toLowerCase()}"><td><div class="person"><span class="person-initial">${escapeHtml(member.name.split(" ").map(part => part[0]).join(""))}</span><span>${escapeHtml(member.name)}<small>${escapeHtml(member.email || "No email")}</small></span></div></td><td>${escapeHtml(member.group)}</td><td>${displayDate(member.joined)}</td><td><span class="status ${member.status === "Pending" ? "pending" : ""}">${escapeHtml(member.status)}</span></td></tr>`).join("")}</tbody></table></div>${members.length ? "" : `<div class="empty-state">No members are recorded yet. Add your first member above.</div>`}</div>`;
+    }
+
+    function membersPage() {
+      return `${heading("Members")}<article class="panel"><div class="panel-heading"><div><h2>Add a member</h2><p>Admin and Secretary can add church directory records</p></div></div><form class="form-grid" id="member-form"><label class="field">Full name<input name="name" maxlength="100" required></label><label class="field">Email address<input name="email" type="email" maxlength="180"></label><label class="field">Ministry or group<input name="group" maxlength="80" value="General"></label><button class="button" type="submit">Save member</button></form></article>${memberTable()}`;
+    }
+
+    function transactionRows() {
+      return transactions.map(item => `<li><span>${escapeHtml(item.title)}<small>${escapeHtml(item.category)} · ${displayDate(item.date)}</small></span><span class="amount ${item.direction === "Income" ? "positive" : ""}">${item.direction === "Income" ? "+" : "−"} ${formatCurrency(item.amount)}</span></li>`).join("");
+    }
+
+    function homePage() {
+      const moneyAccess = ["Admin", "Financial Secretary", "Treasurer"].includes(currentRole);
+      const welcome = currentRole === "Admin" ? "Welcome back" : `Welcome, ${currentRole.toLowerCase()}`;
+      const primaryAction = currentRole === "Secretary"
+        ? `<button class="button" data-page-link="Announcements" type="button"><span aria-hidden="true">+</span> New announcement</button>`
+        : currentRole === "Admin" ? `<button class="button" data-action="add-member" type="button"><span aria-hidden="true">+</span> Add member</button>` : "";
+      const duesSummary = currentRole === "Financial Secretary" || currentRole === "Treasurer" ? (() => {
+        const summary = dues.reduce((totals, item) => {
+          totals.paid += Number(item.amountPaid || 0);
+          totals.expected += Number(item.expectedDues || 0);
+          totals.owing += Number(item.amountPaid || 0) < Number(item.expectedDues || 0) ? 1 : 0;
+          return totals;
+        }, { paid: 0, expected: 0, owing: 0 });
+        return `<article class="panel"><div class="panel-heading"><div><h2>Dues overview</h2><p>Members and balances due</p></div><button class="quiet-link" data-page-link="Dues" type="button">Open dues &rarr;</button></div><ul class="detail-list"><li><span>Collected<small>Total dues received</small></span><strong>${formatCurrency(summary.paid)}</strong></li><li><span>Expected<small>Total due target</small></span><strong>${formatCurrency(summary.expected)}</strong></li><li><span>Still owing<small>Members below expected balance</small></span><strong>${summary.owing}</strong></li></ul></article>`;
+      })() : "";
+      const upcomingEvents = calendarEvents.slice(0, 3).map(item => {
+        const date = new Date(`${item.date}T12:00:00`);
+        return `<div class="event"><div class="event-date"><b>${date.getDate()}</b><small>${date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</small></div><div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.time)} · ${escapeHtml(item.location)}</p></div></div>`;
+      }).join("");
+      const secretaryAnnouncements = ["Secretary", "Admin"].includes(currentRole) ? `<article class="panel table-panel"><div class="panel-heading"><div><h2>Latest announcements</h2><p>Updates shared with the congregation</p></div><button class="quiet-link" data-page-link="Announcements" type="button">Manage announcements &rarr;</button></div><div class="events">${announcements.slice(0, 2).map(item => `<div class="event"><span class="stat-mark" aria-hidden="true">✉</span><div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.audience)} · ${displayDate(item.createdAt || item.date)}</p></div></div>`).join("") || `<div class="empty-state">No announcements published yet.</div>`}</div></article>` : "";
+      return `${heading(welcome, primaryAction)}
+        <section class="stats" aria-label="Church summary">
+          ${stat("Active members", members.filter(member => member.status === "Active").length, `${members.length} directory records`, "♙")}
+          ${stat("Attendance checks", attendanceRecords.length, "Saved service records", "✓")}
+          ${moneyAccess ? stat("Finance records", transactions.length, "Saved transactions", "₵") : stat("Upcoming events", calendarEvents.length, "Church calendar records", "◇")}
+          ${moneyAccess ? stat("Pending expenses", transactions.filter(item => item.direction === "Expense" && item.status === "Pending").length, "Awaiting review", "!") : stat("Announcements", announcements.length, "Published updates", "✉")}
+        </section>
+        <section class="dashboard-grid">
+          ${currentRole === "Financial Secretary" || currentRole === "Treasurer" ? duesSummary : `<article class="panel"><div class="panel-heading"><div><h2>Attendance checks</h2><p>Most recently recorded gatherings</p></div><button class="quiet-link" data-page-link="Attendance" type="button">Open attendance &rarr;</button></div><ul class="detail-list">${attendanceRecords.slice(0, 4).map(item => `<li><span>${escapeHtml(item.service)}<small>${displayDate(item.date)}</small></span><strong>${Number(item.count)}</strong></li>`).join("") || `<li><span>No attendance records yet<small>Record your first gathering</small></span><strong>—</strong></li>`}</ul></article>`}
+          <article class="panel"><div class="panel-heading"><div><h2>Coming up</h2><p>Church calendar</p></div><button class="quiet-link" data-page-link="Calendar" type="button">View calendar &rarr;</button></div><div class="events">${upcomingEvents}</div></article>
+        </section>
+        ${secretaryAnnouncements}
+        ${currentRole === "Admin" || moneyAccess ? `<article class="panel table-panel"><div class="panel-heading"><div><h2>Recent transactions</h2><p>Latest giving and church expenses</p></div><button class="quiet-link" data-page-link="Finances" type="button">Open finances &rarr;</button></div><ul class="detail-list">${transactionRows() || `<li><span>No finance records yet</span></li>`}</ul></article>` : memberTable()}`;
+    }
+
+    function attendancePage() {
+      return `${heading("Attendance", `<button class="button secondary" data-action="export" type="button">Export summary</button>`)}
+        <section class="stats">${stat("Attendance checks", attendanceRecords.length, "Saved records", "✓")}${stat("People counted", attendanceRecords.reduce((sum, item) => sum + Number(item.count), 0), "Across loaded records", "♙")}${stat("Services tracked", new Set(attendanceRecords.map(item => item.service)).size, "Different service or group names", "◷")}${stat("Latest check", attendanceRecords[0] ? displayDate(attendanceRecords[0].date, { month: "short", day: "numeric" }) : "—", "Most recent record", "↗")}</section>
+        <div class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Record attendance</h2><p>Enter the count after each service or gathering</p></div></div><form class="form-grid" id="attendance-form"><label class="field">Date<input name="date" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label><label class="field">Service or group<select name="service"><option>Sunday morning</option><option>Sunday evening</option><option>Midweek Bible study</option><option>Other gathering</option></select></label><label class="field">People present<input name="count" type="number" min="0" step="1" placeholder="e.g. 124" required></label><button class="button" type="submit">Save attendance</button></form></article><article class="panel"><div class="panel-heading"><div><h2>Attendance notes</h2><p>For the secretary's follow-up</p></div></div><ul class="detail-list"><li><span>Latest record<small>${attendanceRecords[0] ? escapeHtml(attendanceRecords[0].service) : "No records yet"}</small></span><strong>${attendanceRecords[0] ? Number(attendanceRecords[0].count) : "—"}</strong></li><li><span>Latest date<small>Most recent attendance check</small></span><strong>${attendanceRecords[0] ? displayDate(attendanceRecords[0].date, { month: "short", day: "numeric" }) : "—"}</strong></li></ul></article></div>
+        <article class="panel table-panel"><div class="panel-heading"><div><h2>Recent attendance checks</h2><p>Latest recorded service totals</p></div></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Service or group</th><th>People present</th></tr></thead><tbody>${attendanceRecords.map(item => `<tr><td>${displayDate(item.date)}</td><td>${escapeHtml(item.service)}</td><td>${Number(item.count)}</td></tr>`).join("")}</tbody></table></div>${attendanceRecords.length ? "" : `<div class="empty-state">No attendance has been recorded yet.</div>`}</article>`;
+    }
+
+    function announcementsPage() {
+      return `${heading("Announcements", `<button class="button secondary" data-page-link="Home" type="button">Back to dashboard</button>`)}<section class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>New announcement</h2><p>Share a clear update with the church community</p></div></div><form class="form-grid" id="announcement-form"><label class="field full">Announcement title<input name="title" maxlength="90" placeholder="e.g. Sunday service time" required></label><label class="field">Audience<select name="audience"><option>All members</option><option>Visitors</option><option>Youth group</option><option>Worship team</option><option>Volunteers</option></select></label><label class="field full">Message<textarea name="body" maxlength="600" placeholder="Write the announcement..." required></textarea></label><button class="button" type="submit">Publish announcement</button></form></article><article class="panel"><div class="panel-heading"><div><h2>Published announcements</h2><p>${announcements.length} updates</p></div></div>${announcements.length ? announcements.map(item => `<div class="announcement-copy"><div class="announcement-meta">${escapeHtml(item.audience)} · ${displayDate(item.createdAt || item.date)}</div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.body)}</p></div>`).join("") : `<div class="empty-state">No announcements yet.</div>`}</article></section>`;
+    }
+
+    function calendarPage() {
+      const year = calendarMonth.getFullYear();
+      const month = calendarMonth.getMonth();
+      const monthName = calendarMonth.toLocaleString("en-US", { month: "long", year: "numeric" });
+      const offset = new Date(year, month, 1).getDay();
+      const dayCount = new Date(year, month + 1, 0).getDate();
+      const cells = Array.from({ length: 42 }, (_, index) => {
+        const day = index - offset + 1;
+        if (day < 1 || day > dayCount) return `<div class="calendar-day empty" aria-hidden="true"></div>`;
+        const isoDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const hasEvent = calendarEvents.some(item => item.date === isoDate);
+        const isToday = isoDate === new Date().toISOString().slice(0, 10);
+        return hasEvent
+          ? `<button class="calendar-day has-event ${isToday ? "today" : ""}" type="button" data-event-date="${isoDate}" aria-label="${monthName} ${day}, event scheduled">${day}</button>`
+          : `<div class="calendar-day ${isToday ? "today" : ""}">${day}</div>`;
+      }).join("");
+      const monthEvents = calendarEvents.filter(item => item.date.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`));
+      const canManageEvents = ["Admin", "Secretary"].includes(currentRole);
+      return `${heading("Church calendar")}<section class="section-layout"><article class="panel"><div class="panel-heading"><h2>Monthly view</h2><div class="calendar-toolbar"><button class="icon-button" type="button" data-action="calendar-prev" aria-label="Previous month">&#8592;</button><strong>${monthName}</strong><button class="icon-button" type="button" data-action="calendar-next" aria-label="Next month">&#8594;</button></div></div><div class="calendar-grid" role="grid" aria-label="${monthName}">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => `<div class="calendar-weekday" role="columnheader">${day}</div>`).join("")}${cells}</div></article><article class="panel"><div class="panel-heading"><div><h2>Events this month</h2><p>${monthEvents.length} scheduled events</p></div></div>${monthEvents.length ? monthEvents.map(item => {
+        const date = new Date(`${String(item.date).slice(0, 10)}T12:00:00`);
+        return `<div class="event" style="margin:0 19px"><div class="event-date"><b>${date.getDate()}</b><small>${date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</small></div><div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.time)} · ${escapeHtml(item.location)}</p></div></div>`;
+      }).join("") : `<div class="empty-state">No events scheduled for this month.</div>`}</article></section>${canManageEvents ? `<article class="panel table-panel"><div class="panel-heading"><div><h2>Add calendar event</h2><p>Schedule a service, meeting, or church activity</p></div></div><form class="form-grid" id="event-form"><label class="field">Event title<input name="title" maxlength="120" required></label><label class="field">Date<input name="date" type="date" required></label><label class="field">Time<input name="time" placeholder="9:00 AM" maxlength="30" required></label><label class="field">Location<input name="location" maxlength="120" required></label><button class="button" type="submit">Save event</button></form></article>` : ""}`;
+    }
+
+    function duesPage() {
+      const duesByMember = new Map(dues.map(item => [String(item.memberId), item]));
+      const totalExpected = members.reduce((sum, member) => {
+        const item = duesByMember.get(String(member._id || member.id));
+        return sum + Number(item?.expectedDues || 100);
+      }, 0);
+      const totalPaid = members.reduce((sum, member) => {
+        const item = duesByMember.get(String(member._id || member.id));
+        return sum + Number(item?.amountPaid || 0);
+      }, 0);
+      const owingMembers = members.filter(member => {
+        const item = duesByMember.get(String(member._id || member.id));
+        const paid = Number(item?.amountPaid || 0);
+        const expected = Number(item?.expectedDues || 100);
+        return paid < expected;
+      }).length;
+      return `${heading("Dues")}<section class="stats">${stat("Members listed", members.length, "Registered church members", "♙")}${stat("Dues collected", formatCurrency(totalPaid), "Across all recorded payments", "₵")}${stat("Members owing", owingMembers, "Still below expected dues", "!")}${stat("Expected total", formatCurrency(totalExpected), "Default monthly target", "◇")}</section>
+        <div class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Record dues payment</h2><p>Log a member's payment and expected dues for the month</p></div></div><form class="form-grid" id="dues-form"><label class="field">Member<select name="memberId" required>${members.map(member => `<option value="${member._id || member.id}">${escapeHtml(member.name)} · ${escapeHtml(member.group)}</option>`).join("") || `<option value="">No members available</option>`}</select></label><label class="field">Amount paid (GHS)<input name="amountPaid" type="number" min="0.01" step="0.01" value="0.00" required></label><label class="field">Expected dues (GHS)<input name="expectedDues" type="number" min="0" step="0.01" value="100" required></label><button class="button" type="submit">Save payment</button></form></article><article class="panel table-panel"><div class="panel-heading"><div><h2>Dues register</h2><p>All members with payment totals and owing status</p></div></div><div class="table-scroll"><table><thead><tr><th>Member</th><th>Group</th><th>Dues paid</th><th>Expected</th><th>Status</th></tr></thead><tbody>${members.map(member => {
+        const item = duesByMember.get(String(member._id || member.id));
+        const paid = Number(item?.amountPaid || 0);
+        const expected = Number(item?.expectedDues || 100);
+        const owing = Math.max(0, expected - paid);
+        const status = paid >= expected ? "Paid" : paid > 0 ? "Partial" : "Owing";
+        return `<tr><td><div class="person"><span class="person-initial">${escapeHtml(member.name.split(" ").map(part => part[0]).join(""))}</span><span>${escapeHtml(member.name)}<small>${escapeHtml(member.email || "No email")}</small></span></div></td><td>${escapeHtml(member.group)}</td><td>${formatCurrency(paid)}</td><td>${formatCurrency(expected)}</td><td><span class="status ${status === "Owing" ? "pending" : ""}">${status === "Owing" ? `${formatCurrency(owing)} owing` : status}</span></td></tr>`;
+      }).join("") || `<tr><td colspan="5" class="empty-state">No members have been added yet.</td></tr>`}</tbody></table></div></article></div>`;
+    }
+
+    function financePage() {
+      const income = transactions.filter(item => item.direction === "Income").reduce((sum, item) => sum + Number(item.amount), 0);
+      const expenses = transactions.filter(item => item.direction === "Expense").reduce((sum, item) => sum + Number(item.amount), 0);
+      const pendingExpenses = transactions.filter(item => item.direction === "Expense" && item.status === "Pending");
+      return `${heading("Finances")}<section class="stats">${stat("Recorded income", formatCurrency(income), "All saved income", "₵")}${stat("Recorded expenses", formatCurrency(expenses), "All saved expenses", "−")}${stat("Net recorded", formatCurrency(income - expenses), "Income less expenses", "◇")}${stat("Pending expenses", pendingExpenses.length, "Awaiting review", "!")}</section>
+        <div class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Record transaction</h2><p>Save income and expense records in Ghana cedis</p></div></div><form class="form-grid" id="transaction-form"><label class="field">Description<input name="title" maxlength="120" required></label><label class="field">Category<input name="category" maxlength="80" required></label><label class="field">Date<input name="date" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label><label class="field">Amount (GHS)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Type<select name="direction"><option>Income</option><option>Expense</option></select></label><button class="button" type="submit">Save transaction</button></form></article><article class="panel"><div class="panel-heading"><div><h2>Recent transactions</h2><p>${transactions.length} saved records</p></div></div><ul class="detail-list">${transactionRows() || `<li><span>No transactions recorded yet.</span></li>`}</ul></article></div>
+        <article class="panel table-panel"><div class="panel-heading"><div><h2>Expense review</h2><p>Pending expenses are visible to Admin, Financial Secretary, and Treasurer</p></div><span class="status pending">${pendingExpenses.length} pending</span></div>${pendingExpenses.length ? `<ul class="detail-list">${pendingExpenses.map(item => `<li><span>${escapeHtml(item.title)}<small>${escapeHtml(item.category)} · ${displayDate(item.date)}</small></span><strong>${formatCurrency(item.amount)}</strong></li>`).join("")}</ul>` : `<div class="empty-state">No expenses are awaiting review.</div>`}</article>`;
+    }
+
+    function reportsPage() {
+      const reports = currentRole === "Secretary" ? [["Membership register", "Member status, ministry groups, and join dates"], ["Attendance summary", "Weekly service and ministry participation"], ["New visitor follow-up", "Recent enquiries and connection status"]] : [["Monthly giving summary", "Donations and offerings by fund"], ["Income and expenses", "Transaction summary for September 2026"], ["Approval activity", "Expense requests and decision history"]];
+      return `${heading("Reports", `<button class="button secondary" data-action="export" type="button">Export report</button>`)}<section class="section-layout">${reports.map(([title, detail]) => `<article class="panel"><div class="panel-heading"><div><h2>${title}</h2><p>${detail}</p></div></div><div class="settings-copy">Reporting period: <strong>September 2026</strong><br><br><button class="quiet-link" data-action="report" type="button">Open report &rarr;</button></div></article>`).join("")}</section>`;
+    }
+
+    function settingsPage() {
+      const staffManager = currentRole === "Admin" ? `<article class="panel table-panel"><div class="panel-heading"><div><h2>Staff accounts</h2><p>Create logins and assign dashboard roles</p></div></div><form class="form-grid" id="staff-form"><label class="field">Full name<input name="name" maxlength="100" required></label><label class="field">Email address<input name="email" type="email" required></label><label class="field">Temporary password<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label class="field">Role<select name="role"><option>Secretary</option><option>Finance</option><option>Treasurer</option><option>Admin</option></select></label><button class="button" type="submit">Create staff login</button></form><div class="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Access</th></tr></thead><tbody>${staffUsers.map(user => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.email)}</td><td>${escapeHtml(user.role)}</td><td><span class="status ${user.active ? "" : "inactive"}">${user.active ? "Active" : "Disabled"}</span></td><td>${user.id === currentUser.id ? "Current account" : `<button class="quiet-link" type="button" data-toggle-user="${user.id}" data-active="${user.active}">${user.active ? "Disable" : "Enable"}</button>`}</td></tr>`).join("")}</tbody></table></div></article>` : `<article class="panel"><div class="panel-heading"><div><h2>Staff roles</h2><p>Dashboard access by office</p></div></div><ul class="detail-list"><li><span>Admin<small>Staff accounts and all sections</small></span><span class="status">Full access</span></li><li><span>Secretary<small>Members, attendance, announcements, calendar</small></span><span class="status">Office</span></li><li><span>Finance<small>Finances and reports</small></span><span class="status">Finance</span></li><li><span>Treasurer<small>Finances and reports</small></span><span class="status">Finance</span></li></ul></article>`;
+      return `${heading("Workspace settings")}<section class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Church profile</h2><p>Workspace identity</p></div></div><div class="settings-copy"><strong>Kukurantumi Church Of Christ Youth</strong><br>Youth ministry workspace<br><br>Signed in as <strong>${escapeHtml(currentUser.name)}</strong></div></article>${staffManager}</section>`;
+    }
+
+    function renderPage() {
+      document.getElementById("breadcrumb").textContent = currentPage === "Home" ? "Overview" : currentPage;
+      const canAddMembers = ["Admin", "Secretary"].includes(currentRole);
+      const page = currentPage === "Home" ? homePage() : currentPage === "Members" && canAddMembers ? membersPage() : currentPage === "Attendance" ? attendancePage() : currentPage === "Announcements" ? announcementsPage() : currentPage === "Calendar" ? calendarPage() : currentPage === "Dues" ? duesPage() : currentPage === "Finances" ? financePage() : currentPage === "Reports" ? reportsPage() : settingsPage();
+      document.getElementById("page-content").innerHTML = page;
+      const staffFormForUsername = document.getElementById("staff-form");
+      if (staffFormForUsername) {
+        const usernameLabel = document.createElement("label");
+        usernameLabel.className = "field";
+        usernameLabel.append("Username");
+        const usernameInput = document.createElement("input");
+        usernameInput.name = "username";
+        usernameInput.minLength = 3;
+        usernameInput.maxLength = 32;
+        usernameInput.pattern = "[A-Za-z0-9._-]+";
+        usernameInput.autocomplete = "username";
+        usernameInput.required = true;
+        usernameLabel.append(usernameInput);
+        staffFormForUsername.children[0].insertAdjacentElement("afterend", usernameLabel);
+
+        const staffTable = staffFormForUsername.closest("article").querySelector("table");
+        const usernameHeader = document.createElement("th");
+        usernameHeader.textContent = "Username";
+        staffTable.tHead.rows[0].insertBefore(usernameHeader, staffTable.tHead.rows[0].cells[1]);
+        staffUsers.forEach(user => {
+          const row = Array.from(staffTable.tBodies[0].rows).find(item => item.cells[1].textContent === user.email);
+          if (row) row.insertCell(1).textContent = user.username;
+        });
+      }
+      const staffPasswordInput = document.querySelector('#staff-form input[name="password"]');
+      if (staffPasswordInput) staffPasswordInput.minLength = 8;
+      const financeOption = Array.from(document.querySelectorAll('#staff-form select[name="role"] option')).find(option => option.value === "Finance");
+      if (financeOption) {
+        financeOption.value = "Financial Secretary";
+        financeOption.textContent = "Financial Secretary";
+      }
+      document.querySelectorAll("#page-content .table-scroll tbody tr td:nth-child(4)").forEach(cell => {
+        if (cell.textContent === "Finance") cell.textContent = "Financial Secretary";
+      });
+      document.querySelectorAll("#page-content .detail-list > li > span").forEach(label => {
+        if (label.firstChild?.textContent.trim() === "Finance") label.firstChild.textContent = "Financial Secretary";
+      });
+      const attendanceForm = document.getElementById("attendance-form");
+      if (attendanceForm) attendanceForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        const values = new FormData(attendanceForm);
+        try {
+          await api("/attendance", { method: "POST", body: JSON.stringify(Object.fromEntries(values)) });
+          attendanceRecords = await api("/attendance");
+          setNotice("Attendance saved.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      const announcementForm = document.getElementById("announcement-form");
+      if (announcementForm) announcementForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        const values = new FormData(announcementForm);
+        try {
+          await api("/announcements", { method: "POST", body: JSON.stringify(Object.fromEntries(values)) });
+          announcements = await api("/announcements");
+          setNotice("Announcement published.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      const memberForm = document.getElementById("member-form");
+      if (memberForm) memberForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        try {
+          await api("/members", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(memberForm))) });
+          members = await api("/members");
+          setNotice("Member saved to the directory.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      const eventForm = document.getElementById("event-form");
+      if (eventForm) eventForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        try {
+          await api("/events", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(eventForm))) });
+          calendarEvents = (await api("/events")).map(item => ({ ...item, date: new Date(item.date).toISOString().slice(0, 10) }));
+          setNotice("Calendar event saved.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      const duesForm = document.getElementById("dues-form");
+      if (duesForm) duesForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        try {
+          const record = Object.fromEntries(new FormData(duesForm));
+          await api("/dues", { method: "POST", body: JSON.stringify({
+            memberId: record.memberId,
+            amountPaid: Number(record.amountPaid),
+            expectedDues: Number(record.expectedDues)
+          }) });
+          dues = await api("/dues");
+          setNotice("Dues payment saved.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      const transactionForm = document.getElementById("transaction-form");
+      if (transactionForm) transactionForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        try {
+          const record = Object.fromEntries(new FormData(transactionForm));
+          record.amount = Number(record.amount);
+          await api("/transactions", { method: "POST", body: JSON.stringify(record) });
+          transactions = await api("/transactions");
+          setNotice("Transaction saved.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      const staffForm = document.getElementById("staff-form");
+      if (staffForm) staffForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        try {
+          await api("/users", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(staffForm))) });
+          staffUsers = await api("/users");
+          setNotice("Staff login created.");
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      });
+      document.querySelectorAll("[data-toggle-user]").forEach(button => button.addEventListener("click", async () => {
+        try {
+          const user = staffUsers.find(item => item.id === button.dataset.toggleUser);
+          await api(`/users/${encodeURIComponent(button.dataset.toggleUser)}`, { method: "PATCH", body: JSON.stringify({ active: button.dataset.active !== "true" }) });
+          staffUsers = await api("/users");
+          setNotice(`${user?.name || "Staff account"} access updated.`);
+          renderPage();
+        } catch (error) { setNotice(error.message); }
+      }));
+      const search = document.getElementById("member-search");
+      if (search) search.addEventListener("input", () => {
+        const term = search.value.trim().toLowerCase();
+        let visible = 0;
+        document.querySelectorAll("#member-rows tr").forEach(row => {
+          row.hidden = !row.dataset.search.includes(term);
+          if (!row.hidden) visible++;
+        });
+        let empty = document.getElementById("member-empty");
+        if (!visible && !empty) {
+          empty = document.createElement("tr"); empty.id = "member-empty"; empty.innerHTML = '<td class="empty-state" colspan="4">No matching members.</td>';
+          document.getElementById("member-rows").append(empty);
+        } else if (visible && empty) empty.remove();
+      });
+      document.querySelectorAll("[data-page-link]").forEach(button => button.addEventListener("click", () => {
+        const target = button.dataset.pageLink;
+        if (rolePages[currentRole].includes(target)) { currentPage = target; renderNav(); renderPage(); }
+      }));
+      document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => {
+        if (button.dataset.action === "add-member" && !["Admin", "Secretary"].includes(currentRole)) {
+          setNotice("Only Admin and Secretary can add members.");
+          return;
+        }
+        if (button.dataset.action === "add-member") {
+          currentPage = "Members";
+          renderNav();
+          renderPage();
+          return;
+        }
+        if (button.dataset.action === "calendar-prev" || button.dataset.action === "calendar-next") {
+          calendarMonth.setMonth(calendarMonth.getMonth() + (button.dataset.action === "calendar-next" ? 1 : -1));
+          renderPage();
+          return;
+        }
+        const messages = { export: "Report export is a prototype action.", review: "Approval review is a prototype action.", report: "Report view is a prototype action.", settings: "Profile editing is a prototype action." };
+        setNotice(messages[button.dataset.action] || "This action is not available yet.");
+      }));
+      document.querySelectorAll("[data-event-date]").forEach(button => button.addEventListener("click", () => {
+        const item = calendarEvents.find(event => event.date === button.dataset.eventDate);
+        if (item) setNotice(`${item.title} · ${item.time} · ${item.location}`);
+      }));
+    }
+
+    document.getElementById("logout-button").addEventListener("click", async () => {
+      try { await api("/auth/logout", { method: "POST" }); } catch {}
+      location.replace("/");
+    });
+
+    async function initializeDashboard() {
+      try {
+        const result = await api("/auth/me");
+        currentUser = result.user;
+        currentRole = currentUser.role;
+        document.getElementById("current-user-name").textContent = currentUser.name;
+        document.getElementById("user-avatar").textContent = currentRole.slice(0, 2).toUpperCase();
+        document.getElementById("user-avatar").setAttribute("aria-label", `Current role: ${currentRole}`);
+        await loadWorkspaceData();
+        renderNav();
+        renderPage();
+        document.body.classList.add("authenticated");
+      } catch (error) {
+        if (error.message !== "Please sign in again.") {
+          document.body.classList.add("authenticated");
+          setNotice(error.message);
+        }
+      }
+    }
+    initializeDashboard();
+  </script>
+</body>
+</html>
