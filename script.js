@@ -16,6 +16,15 @@ const roles = ["Admin", "Secretary", "Financial Secretary", "Treasurer", "Member
 const maritalStatuses = ["Single", "Married", "Divorced", "Widowed", "Prefer not to say"];
 const memberAgeGroups = ["Below 20", "20 or above"];
 const legacyMemberAgeGroups = ["20 or under", "Over 20"];
+const allowedOrigins = new Set(
+  String(process.env.ALLOWED_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean).map(value => {
+    const url = new URL(value);
+    if (url.origin !== value || !["http:", "https:"].includes(url.protocol)) {
+      throw new Error("ALLOWED_ORIGINS must be a comma-separated list of exact HTTP or HTTPS origins.");
+    }
+    return url.origin;
+  })
+);
 if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
 
 const userSchema = new mongoose.Schema({
@@ -147,7 +156,11 @@ function requireSameOrigin(req, res, next) {
   const origin = req.get("origin");
   if (origin) {
     try {
-      if (new URL(origin).host !== req.get("host")) return res.status(403).json({ error: "Request origin is not allowed." });
+      const requestOrigin = `${req.protocol}://${req.get("host")}`;
+      const parsedOrigin = new URL(origin);
+      if (parsedOrigin.origin !== requestOrigin && !allowedOrigins.has(parsedOrigin.origin)) {
+        return res.status(403).json({ error: "Request origin is not allowed." });
+      }
     } catch {
       return res.status(403).json({ error: "Invalid request origin." });
     }
@@ -161,6 +174,10 @@ app.get("/dashboard", requireAuth, (req, res) => res.sendFile(path.join(__dirnam
 app.get("/assets/church-logo.svg", (req, res) => res.sendFile(path.join(__dirname, "assets", "church-logo.svg")));
 app.get("/assets/church-logo-dark.svg", (req, res) => res.sendFile(path.join(__dirname, "assets", "church-logo-dark.svg")));
 app.get("/health", (req, res) => res.json({ status: "ok" }));
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "private, no-store");
+  next();
+});
 app.use("/api", requireSameOrigin);
 
 app.post("/api/auth/login", rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-7", legacyHeaders: false }), asyncRoute(async (req, res) => {

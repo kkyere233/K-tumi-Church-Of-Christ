@@ -37,7 +37,21 @@ If the address does not load, allow inbound TCP port 3000 on the host computer's
 New-NetFirewallRule -DisplayName "Church dashboard (LAN)" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000 -Profile Private
 ```
 
-Both computers must be on the same non-guest Wi-Fi network, and the host computer must stay on with the app running. For access from outside that network, deploy the app to a public host such as Render instead; the LAN address is not public.
+Both computers must be on the same non-guest Wi-Fi network, and the host computer must stay on with the app running. For public access, host the Express backend on Render and the static frontend on Netlify as described below.
+
+## Deploy with Netlify and Render
+
+The Express API and MongoDB sessions require a Node.js backend. Netlify serves the frontend, while Render runs the backend; Netlify proxies `/api` and `/health` requests to Render so browser requests and session cookies stay on the Netlify site origin.
+
+1. Deploy the Render backend from this repository using `render.yaml`. Set its `MONGODB_URI`, bootstrap Admin values, and generated `SESSION_SECRET`. Keep `NODE_ENV=production` and `TRUST_PROXY=1`. Note the deployed backend origin, such as `https://your-service.onrender.com`.
+2. In Netlify, import the same GitHub repository. The included `netlify.toml` sets the build command and publish directory. Add the build environment variable `RENDER_BACKEND_URL` with the Render backend origin only, for example `https://your-service.onrender.com` (no path).
+3. Deploy the Netlify site and note its primary origin, for example `https://your-site.netlify.app`.
+4. In the Render service environment, set `ALLOWED_ORIGINS` to the exact Netlify origin, including `https://`. For a custom domain, include both origins separated by a comma. Redeploy Render after changing this setting.
+5. Visit the Netlify site's `/health` route and confirm it returns `{"status":"ok"}`. Then sign in and verify that the dashboard loads and data can be read and saved.
+
+The Netlify build intentionally fails when `RENDER_BACKEND_URL` is missing or is not an HTTPS origin. Do not publish the repository root as a static site; the build copies only the login page, dashboard, and logo assets into `dist`.
+
+The Render blueprint uses its free plan, which may sleep when idle. Netlify's proxy has a 26-second request timeout, so a cold start may make the first login or API request time out. Use an always-on Render plan if this happens or if reliable immediate access is important. Netlify deploy-preview URLs are not automatically allowed; add an exact preview origin to Render's `ALLOWED_ORIGINS` if you need to test a preview.
 
 ## Access
 

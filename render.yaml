@@ -11,6 +11,8 @@ services:
         value: production
       - key: TRUST_PROXY
         value: "1"
+      - key: ALLOWED_ORIGINS
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: MONGODB_URI
