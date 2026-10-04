@@ -193,6 +193,7 @@
     .settings-copy strong { color: var(--ink); }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 19px; }
     .field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
+    .field[hidden] { display: none; }
     .field.full { grid-column: 1 / -1; }
     .field input, .field select, .field textarea { width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; background: var(--control-bg); color: var(--ink); }
     .field textarea { min-height: 100px; resize: vertical; }
@@ -291,7 +292,8 @@
       Admin: ["Home", "Members", "Attendance", "Announcements", "Calendar", "Finances", "Reports", "Settings"],
       Secretary: ["Home", "Members", "Attendance", "Announcements", "Calendar", "Reports"],
       "Financial Secretary": ["Home", "Dues", "Finances", "Reports"],
-      Treasurer: ["Home", "Dues", "Finances", "Reports"]
+      Treasurer: ["Home", "Dues", "Finances", "Reports"],
+      Member: ["Home", "Dues"]
     };
     const glyphs = { Home: "⌂", Members: "♙", Attendance: "✓", Announcements: "✉", Calendar: "▦", Dues: "₵", Finances: "₵", Reports: "▤", Settings: "⚙" };
     let members = [];
@@ -337,9 +339,41 @@
       return `GHS ${Number(value).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
+    function currentMonth() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function displayMonth(value) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ""))) return "Month not recorded";
+      const [year, month] = value.split("-").map(Number);
+      return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+
+    function monthlyDuesRows(records, memberList = [], includeYear = false, defaultDues = 20) {
+      const rows = records.map(item => ({ ...item, legacy: !item.month }));
+      const month = currentMonth();
+      if (includeYear) {
+        const year = new Date().getFullYear();
+        for (let monthNumber = 1; monthNumber <= 12; monthNumber++) {
+          const yearMonth = `${year}-${String(monthNumber).padStart(2, "0")}`;
+          if (!records.some(item => item.month === yearMonth)) {
+            rows.push({ memberName: "", month: yearMonth, expectedDues: defaultDues, amountPaid: 0, status: "Owing", virtual: true });
+          }
+        }
+      }
+      memberList.forEach(member => {
+        const memberId = String(member._id || member.id);
+        if (!records.some(item => String(item.memberId) === memberId && item.month === month)) {
+          rows.push({ memberId, memberName: member.name, month, expectedDues: Number(member.monthlyDues || 20), amountPaid: 0, status: "Owing", virtual: true });
+        }
+      });
+      return rows.sort((left, right) => String(right.month || "").localeCompare(String(left.month || "")) || left.memberName.localeCompare(right.memberName));
+    }
+
     async function loadWorkspaceData() {
       const requests = [];
-      if (["Admin", "Secretary", "Financial Secretary"].includes(currentRole)) {
+      if (["Admin", "Secretary", "Financial Secretary", "Treasurer"].includes(currentRole)) {
         requests.push(api("/members").then(data => { members = data; }));
       }
       if (["Admin", "Secretary"].includes(currentRole)) {
@@ -347,9 +381,13 @@
         requests.push(api("/announcements").then(data => { announcements = data; }));
       }
       if (["Admin", "Secretary", "Financial Secretary", "Treasurer"].includes(currentRole)) requests.push(api("/events").then(data => { calendarEvents = data.map(item => ({ ...item, date: new Date(item.date).toISOString().slice(0, 10) })); }));
-      if (["Admin", "Financial Secretary", "Treasurer"].includes(currentRole)) {
-        requests.push(api("/transactions").then(data => { transactions = data; }));
-        requests.push(api("/dues").then(data => { dues = data; }));
+      if (["Admin", "Financial Secretary", "Treasurer", "Member"].includes(currentRole)) {
+        if (currentRole === "Member") {
+          requests.push(api("/dues").then(data => { dues = data; }));
+        } else {
+          requests.push(api("/transactions").then(data => { transactions = data; }));
+          requests.push(api("/dues").then(data => { dues = data; }));
+        }
       }
       if (currentRole === "Admin") requests.push(api("/users").then(data => { staffUsers = data; }));
       await Promise.all(requests);
@@ -387,11 +425,14 @@
     }
 
     function memberTable() {
-      return `<div class="panel table-panel"><div class="panel-heading"><div><h2>Church directory</h2><p>${members.length} member records</p></div><div class="table-tools"><input class="search" id="member-search" type="search" placeholder="Search members" aria-label="Search members"></div></div><div class="table-scroll"><table><thead><tr><th>Member</th><th>Ministry</th><th>Joined</th><th>Status</th></tr></thead><tbody id="member-rows">${members.map(member => `<tr data-search="${escapeHtml(`${member.name} ${member.email} ${member.group}`).toLowerCase()}"><td><div class="person"><span class="person-initial">${escapeHtml(member.name.split(" ").map(part => part[0]).join(""))}</span><span>${escapeHtml(member.name)}<small>${escapeHtml(member.email || "No email")}</small></span></div></td><td>${escapeHtml(member.group)}</td><td>${displayDate(member.joined)}</td><td><span class="status ${member.status === "Pending" ? "pending" : ""}">${escapeHtml(member.status)}</span></td></tr>`).join("")}</tbody></table></div>${members.length ? "" : `<div class="empty-state">No members are recorded yet. Add your first member above.</div>`}</div>`;
+      return `<div class="panel table-panel"><div class="panel-heading"><div><h2>Church directory</h2><p>${members.length} member records</p></div><div class="table-tools"><input class="search" id="member-search" type="search" placeholder="Search members" aria-label="Search members"></div></div><div class="table-scroll"><table><thead><tr><th>Member</th><th>Age group</th><th>Marital status</th><th>Contact</th><th>Ministry</th><th>Joined</th><th>Status</th></tr></thead><tbody id="member-rows">${members.map(member => {
+        const ageGroup = member.ageGroup || "Not provided";
+        return `<tr data-search="${escapeHtml(`${member.name} ${member.email} ${member.group} ${ageGroup} ${member.maritalStatus || ""} ${member.contact || ""}`).toLowerCase()}"><td><div class="person"><span class="person-initial">${escapeHtml(member.name.split(" ").map(part => part[0]).join(""))}</span><span>${escapeHtml(member.name)}<small>${escapeHtml(member.email || "No email")}</small></span></div></td><td>${ageGroup}</td><td>${escapeHtml(member.maritalStatus || "Not provided")}</td><td>${escapeHtml(member.contact || "Not provided")}</td><td>${escapeHtml(member.group)}</td><td>${displayDate(member.joined)}</td><td><span class="status ${member.status === "Pending" ? "pending" : ""}">${escapeHtml(member.status)}</span></td></tr>`;
+      }).join("")}</tbody></table></div>${members.length ? "" : `<div class="empty-state">No members are recorded yet. Add your first member above.</div>`}</div>`;
     }
 
     function membersPage() {
-      return `${heading("Members")}<article class="panel"><div class="panel-heading"><div><h2>Add a member</h2><p>Admin and Secretary can add church directory records</p></div></div><form class="form-grid" id="member-form"><label class="field">Full name<input name="name" maxlength="100" required></label><label class="field">Email address<input name="email" type="email" maxlength="180"></label><label class="field">Ministry or group<input name="group" maxlength="80" value="General"></label><button class="button" type="submit">Save member</button></form></article>${memberTable()}`;
+      return `${heading("Members")}<article class="panel"><div class="panel-heading"><div><h2>Add a member</h2><p>Admin and Secretary can add church directory records</p></div></div><form class="form-grid" id="member-form"><label class="field">Full name<input name="name" maxlength="100" required></label><label class="field">Email address<input name="email" type="email" maxlength="180"></label><label class="field">Age group<select name="ageGroup" required><option value="">Select age group</option><option value="Below 20">Below 20 — GHS 10/month</option><option value="20 or above">20 or above (including age 20) — GHS 20/month</option></select></label><label class="field">Marital status<select name="maritalStatus"><option value="">Not provided</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option><option>Prefer not to say</option></select></label><label class="field">Contact phone<input name="contact" type="tel" maxlength="30" autocomplete="tel"></label><label class="field">Ministry or group<input name="group" maxlength="80" value="General"></label><button class="button" type="submit">Save member</button></form></article>${memberTable()}`;
     }
 
     function transactionRows() {
@@ -399,6 +440,26 @@
     }
 
     function homePage() {
+      if (currentRole === "Member") {
+        const periods = monthlyDuesRows(dues, [], true, Number(currentUser.monthlyDues || 20));
+        const totalPaid = dues.reduce((sum, item) => sum + Number(item.amountPaid || 0), 0);
+        const totalOwing = periods.reduce((sum, item) => sum + Math.max(0, Number(item.expectedDues || 0) - Number(item.amountPaid || 0)), 0);
+        const monthlyRows = periods.map(item => {
+          const expected = Number(item.expectedDues || 0);
+          const paid = Number(item.amountPaid || 0);
+          const owing = Math.max(0, expected - paid);
+          const status = owing === 0 ? "Paid" : paid > 0 ? "Partial" : "Owing";
+          return `<tr><td>${escapeHtml(item.legacy ? "Before monthly tracking" : displayMonth(item.month))}</td><td>${formatCurrency(expected)}</td><td>${formatCurrency(paid)}</td><td>${formatCurrency(owing)}</td><td><span class="status ${owing > 0 ? "pending" : ""}">${status}</span></td></tr>`;
+        }).join("");
+        return `${heading(`Welcome, ${escapeHtml(currentUser.name)}`)}
+          <section class="stats" aria-label="My dues summary">
+            ${stat("Total dues paid", formatCurrency(totalPaid), "All recorded payments", "₵")}
+            ${stat("Amount currently owed", formatCurrency(totalOwing), "Across listed dues periods", "!")}
+            ${stat("Periods with a balance", periods.filter(item => Number(item.amountPaid || 0) < Number(item.expectedDues || 0)).length, "Months still owing", "◷")}
+            ${stat("Dues periods", periods.length, "Monthly records", "▦")}
+          </section>
+          <article class="panel table-panel"><div class="panel-heading"><div><h2>My monthly dues</h2><p>See the amount paid and any balance for each month</p></div><button class="quiet-link" data-page-link="Dues" type="button">View dues &rarr;</button></div><div class="table-scroll"><table><thead><tr><th>Month</th><th>Expected</th><th>Paid</th><th>Owing</th><th>Status</th></tr></thead><tbody>${monthlyRows || `<tr><td colspan="5" class="empty-state">No dues records are available.</td></tr>`}</tbody></table></div></article>`;
+      }
       const moneyAccess = ["Admin", "Financial Secretary", "Treasurer"].includes(currentRole);
       const welcome = currentRole === "Admin" ? "Welcome back" : `Welcome, ${currentRole.toLowerCase()}`;
       const primaryAction = currentRole === "Secretary"
@@ -411,7 +472,7 @@
           totals.owing += Number(item.amountPaid || 0) < Number(item.expectedDues || 0) ? 1 : 0;
           return totals;
         }, { paid: 0, expected: 0, owing: 0 });
-        return `<article class="panel"><div class="panel-heading"><div><h2>Dues overview</h2><p>Members and balances due</p></div><button class="quiet-link" data-page-link="Dues" type="button">Open dues &rarr;</button></div><ul class="detail-list"><li><span>Collected<small>Total dues received</small></span><strong>${formatCurrency(summary.paid)}</strong></li><li><span>Expected<small>Total due target</small></span><strong>${formatCurrency(summary.expected)}</strong></li><li><span>Still owing<small>Members below expected balance</small></span><strong>${summary.owing}</strong></li></ul></article>`;
+        return `<article class="panel"><div class="panel-heading"><div><h2>Dues overview</h2><p>Members and balances due</p></div><button class="quiet-link" data-page-link="Dues" type="button">Open dues &rarr;</button></div><ul class="detail-list"><li><span>Collected<small>Total dues received</small></span><strong>${formatCurrency(summary.paid)}</strong></li><li><span>Expected<small>Total due across recorded periods</small></span><strong>${formatCurrency(summary.expected)}</strong></li><li><span>Unpaid periods<small>Monthly balances still outstanding</small></span><strong>${summary.owing}</strong></li></ul></article>`;
       })() : "";
       const upcomingEvents = calendarEvents.slice(0, 3).map(item => {
         const date = new Date(`${item.date}T12:00:00`);
@@ -469,30 +530,34 @@
     }
 
     function duesPage() {
-      const duesByMember = new Map(dues.map(item => [String(item.memberId), item]));
-      const totalExpected = members.reduce((sum, member) => {
-        const item = duesByMember.get(String(member._id || member.id));
-        return sum + Number(item?.expectedDues || 100);
-      }, 0);
-      const totalPaid = members.reduce((sum, member) => {
-        const item = duesByMember.get(String(member._id || member.id));
-        return sum + Number(item?.amountPaid || 0);
-      }, 0);
-      const owingMembers = members.filter(member => {
-        const item = duesByMember.get(String(member._id || member.id));
-        const paid = Number(item?.amountPaid || 0);
-        const expected = Number(item?.expectedDues || 100);
-        return paid < expected;
-      }).length;
-      return `${heading("Dues")}<section class="stats">${stat("Members listed", members.length, "Registered church members", "♙")}${stat("Dues collected", formatCurrency(totalPaid), "Across all recorded payments", "₵")}${stat("Members owing", owingMembers, "Still below expected dues", "!")}${stat("Expected total", formatCurrency(totalExpected), "Default monthly target", "◇")}</section>
-        <div class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Record dues payment</h2><p>Log a member's payment and expected dues for the month</p></div></div><form class="form-grid" id="dues-form"><label class="field">Member<select name="memberId" required>${members.map(member => `<option value="${member._id || member.id}">${escapeHtml(member.name)} · ${escapeHtml(member.group)}</option>`).join("") || `<option value="">No members available</option>`}</select></label><label class="field">Amount paid (GHS)<input name="amountPaid" type="number" min="0.01" step="0.01" value="0.00" required></label><label class="field">Expected dues (GHS)<input name="expectedDues" type="number" min="0" step="0.01" value="100" required></label><button class="button" type="submit">Save payment</button></form></article><article class="panel table-panel"><div class="panel-heading"><div><h2>Dues register</h2><p>All members with payment totals and owing status</p></div></div><div class="table-scroll"><table><thead><tr><th>Member</th><th>Group</th><th>Dues paid</th><th>Expected</th><th>Status</th></tr></thead><tbody>${members.map(member => {
-        const item = duesByMember.get(String(member._id || member.id));
-        const paid = Number(item?.amountPaid || 0);
-        const expected = Number(item?.expectedDues || 100);
+      if (currentRole === "Member") {
+        const periods = monthlyDuesRows(dues, [], true, Number(currentUser.monthlyDues || 20));
+        const totalPaid = dues.reduce((sum, item) => sum + Number(item.amountPaid || 0), 0);
+        const totalOwing = periods.reduce((sum, item) => sum + Math.max(0, Number(item.expectedDues || 0) - Number(item.amountPaid || 0)), 0);
+        return `${heading("My dues")}<section class="stats">${stat("Total dues paid", formatCurrency(totalPaid), "All recorded payments", "₵")}${stat("Amount currently owed", formatCurrency(totalOwing), "Across listed dues periods", "!")}${stat("Unpaid periods", periods.filter(item => Number(item.amountPaid || 0) < Number(item.expectedDues || 0)).length, "Months with a balance", "◷")}${stat("Dues periods", periods.length, "Monthly records", "▦")}</section>
+          <article class="panel table-panel"><div class="panel-heading"><div><h2>Monthly dues history</h2><p>Amounts owed and paid by month</p></div></div><div class="table-scroll"><table><thead><tr><th>Month</th><th>Expected</th><th>Paid</th><th>Owing</th><th>Status</th></tr></thead><tbody>${periods.map(item => {
+            const expected = Number(item.expectedDues || 0);
+            const paid = Number(item.amountPaid || 0);
+            const owing = Math.max(0, expected - paid);
+            const status = owing === 0 ? "Paid" : paid > 0 ? "Partial" : "Owing";
+            return `<tr><td>${escapeHtml(item.legacy ? "Before monthly tracking" : displayMonth(item.month))}</td><td>${formatCurrency(expected)}</td><td>${formatCurrency(paid)}</td><td>${formatCurrency(owing)}</td><td><span class="status ${owing > 0 ? "pending" : ""}">${status}</span></td></tr>`;
+          }).join("") || `<tr><td colspan="5" class="empty-state">No dues records are available.</td></tr>`}</tbody></table></div></article>`;
+      }
+
+      const rows = monthlyDuesRows(dues, members);
+      const totalExpected = rows.reduce((sum, item) => sum + Number(item.expectedDues || 0), 0);
+      const totalPaid = rows.reduce((sum, item) => sum + Number(item.amountPaid || 0), 0);
+      const owingPeriods = rows.filter(item => Number(item.amountPaid || 0) < Number(item.expectedDues || 0)).length;
+      const memberById = new Map(members.map(member => [String(member._id || member.id), member]));
+      return `${heading("Dues")}<section class="stats">${stat("Members listed", members.length, "Registered church members", "♙")}${stat("Dues collected", formatCurrency(totalPaid), "Across listed monthly records", "₵")}${stat("Unpaid periods", owingPeriods, "Months with an outstanding balance", "!")}${stat("Expected total", formatCurrency(totalExpected), "Monthly dues targets", "◇")}</section>
+        <div class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Record monthly dues</h2><p>Expected dues are set by member age group. Enter 0 paid to register an unpaid month.</p></div></div><form class="form-grid" id="dues-form"><label class="field">Member<select name="memberId" required>${members.map(member => `<option value="${member._id || member.id}" data-monthly-dues="${Number(member.monthlyDues || 20)}">${escapeHtml(member.name)} · ${escapeHtml(member.group)} · ${formatCurrency(member.monthlyDues || 20)}</option>`).join("") || `<option value="">No members available</option>`}</select></label><label class="field">Month<input name="month" type="month" value="${currentMonth()}" required></label><label class="field">Amount paid (GHS)<input name="amountPaid" type="number" min="0" step="0.01" value="0.00" required></label><label class="field">Expected dues (GHS)<input name="expectedDues" type="number" min="0" step="0.01" value="${Number(members[0]?.monthlyDues || 20)}" readonly required></label><button class="button" type="submit">Save monthly dues</button></form></article><article class="panel table-panel"><div class="panel-heading"><div><h2>Monthly dues register</h2><p>Each member's paid amount and balance by month</p></div></div><div class="table-scroll"><table><thead><tr><th>Month</th><th>Member</th><th>Paid</th><th>Expected</th><th>Owing</th><th>Status</th></tr></thead><tbody>${rows.map(item => {
+        const member = memberById.get(String(item.memberId));
+        const paid = Number(item.amountPaid || 0);
+        const expected = Number(item.expectedDues || 0);
         const owing = Math.max(0, expected - paid);
-        const status = paid >= expected ? "Paid" : paid > 0 ? "Partial" : "Owing";
-        return `<tr><td><div class="person"><span class="person-initial">${escapeHtml(member.name.split(" ").map(part => part[0]).join(""))}</span><span>${escapeHtml(member.name)}<small>${escapeHtml(member.email || "No email")}</small></span></div></td><td>${escapeHtml(member.group)}</td><td>${formatCurrency(paid)}</td><td>${formatCurrency(expected)}</td><td><span class="status ${status === "Owing" ? "pending" : ""}">${status === "Owing" ? `${formatCurrency(owing)} owing` : status}</span></td></tr>`;
-      }).join("") || `<tr><td colspan="5" class="empty-state">No members have been added yet.</td></tr>`}</tbody></table></div></article></div>`;
+        const status = owing === 0 ? "Paid" : paid > 0 ? "Partial" : "Owing";
+        return `<tr><td>${escapeHtml(item.legacy ? "Month not recorded" : displayMonth(item.month))}</td><td>${escapeHtml(member?.name || item.memberName)}${member?.group ? `<small>${escapeHtml(member.group)}</small>` : ""}</td><td>${formatCurrency(paid)}</td><td>${formatCurrency(expected)}</td><td>${formatCurrency(owing)}</td><td><span class="status ${owing > 0 ? "pending" : ""}">${status}</span></td></tr>`;
+      }).join("") || `<tr><td colspan="6" class="empty-state">No members have been added yet.</td></tr>`}</tbody></table></div></article></div>`;
     }
 
     function financePage() {
@@ -510,7 +575,7 @@
     }
 
     function settingsPage() {
-      const staffManager = currentRole === "Admin" ? `<article class="panel table-panel"><div class="panel-heading"><div><h2>Staff accounts</h2><p>Create logins and assign dashboard roles</p></div></div><form class="form-grid" id="staff-form"><label class="field">Full name<input name="name" maxlength="100" required></label><label class="field">Email address<input name="email" type="email" required></label><label class="field">Temporary password<input name="password" type="password" minlength="12" autocomplete="new-password" required></label><label class="field">Role<select name="role"><option>Secretary</option><option>Finance</option><option>Treasurer</option><option>Admin</option></select></label><button class="button" type="submit">Create staff login</button></form><div class="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Access</th></tr></thead><tbody>${staffUsers.map(user => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.email)}</td><td>${escapeHtml(user.role)}</td><td><span class="status ${user.active ? "" : "inactive"}">${user.active ? "Active" : "Disabled"}</span></td><td>${user.id === currentUser.id ? "Current account" : `<button class="quiet-link" type="button" data-toggle-user="${user.id}" data-active="${user.active}">${user.active ? "Disable" : "Enable"}</button>`}</td></tr>`).join("")}</tbody></table></div></article>` : `<article class="panel"><div class="panel-heading"><div><h2>Staff roles</h2><p>Dashboard access by office</p></div></div><ul class="detail-list"><li><span>Admin<small>Staff accounts and all sections</small></span><span class="status">Full access</span></li><li><span>Secretary<small>Members, attendance, announcements, calendar</small></span><span class="status">Office</span></li><li><span>Finance<small>Finances and reports</small></span><span class="status">Finance</span></li><li><span>Treasurer<small>Finances and reports</small></span><span class="status">Finance</span></li></ul></article>`;
+      const staffManager = currentRole === "Admin" ? `<article class="panel table-panel"><div class="panel-heading"><div><h2>User accounts</h2><p>Create staff or member logins and assign dashboard roles</p></div></div><form class="form-grid" id="staff-form"><label class="field">Full name<input name="name" maxlength="100" required></label><label class="field">Username<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._\\x2d]+" autocomplete="username" required></label><label class="field">Email address<input name="email" type="email" required></label><label class="field">Temporary password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label class="field">Role<select name="role"><option>Secretary</option><option>Financial Secretary</option><option>Treasurer</option><option>Admin</option><option>Member</option></select></label><label class="field" id="member-age-group-field" hidden>Member age group<select name="ageGroup" disabled><option value="">Select age group</option><option value="Below 20">Below 20 — GHS 10/month</option><option value="20 or above">20 or above (including age 20) — GHS 20/month</option></select></label><button class="button" type="submit">Create login</button></form><div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Access</th></tr></thead><tbody>${staffUsers.map(user => `<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.username)}</td><td>${escapeHtml(user.email)}</td><td>${escapeHtml(user.role)}</td><td><span class="status ${user.active ? "" : "inactive"}">${user.active ? "Active" : "Disabled"}</span></td><td>${user.id === currentUser.id ? "Current account" : `<button class="quiet-link" type="button" data-toggle-user="${user.id}" data-active="${user.active}">${user.active ? "Disable" : "Enable"}</button>`}</td></tr>`).join("")}</tbody></table></div></article>` : `<article class="panel"><div class="panel-heading"><div><h2>Workspace roles</h2><p>Dashboard access by role</p></div></div><ul class="detail-list"><li><span>Admin<small>Staff accounts and all sections</small></span><span class="status">Full access</span></li><li><span>Secretary<small>Members, attendance, announcements, calendar</small></span><span class="status">Office</span></li><li><span>Financial Secretary<small>Dues, finances and reports</small></span><span class="status">Finance</span></li><li><span>Treasurer<small>Dues, finances and reports</small></span><span class="status">Finance</span></li><li><span>Member<small>Personal dues and payment history</small></span><span class="status">Member</span></li></ul></article>`;
       return `${heading("Workspace settings")}<section class="section-layout"><article class="panel"><div class="panel-heading"><div><h2>Church profile</h2><p>Workspace identity</p></div></div><div class="settings-copy"><strong>Kukurantumi Church Of Christ Youth</strong><br>Youth ministry workspace<br><br>Signed in as <strong>${escapeHtml(currentUser.name)}</strong></div></article>${staffManager}</section>`;
     }
 
@@ -521,41 +586,18 @@
       document.getElementById("page-content").innerHTML = page;
       const staffFormForUsername = document.getElementById("staff-form");
       if (staffFormForUsername) {
-        const usernameLabel = document.createElement("label");
-        usernameLabel.className = "field";
-        usernameLabel.append("Username");
-        const usernameInput = document.createElement("input");
-        usernameInput.name = "username";
-        usernameInput.minLength = 3;
-        usernameInput.maxLength = 32;
-        usernameInput.pattern = "[A-Za-z0-9._-]+";
-        usernameInput.autocomplete = "username";
-        usernameInput.required = true;
-        usernameLabel.append(usernameInput);
-        staffFormForUsername.children[0].insertAdjacentElement("afterend", usernameLabel);
-
-        const staffTable = staffFormForUsername.closest("article").querySelector("table");
-        const usernameHeader = document.createElement("th");
-        usernameHeader.textContent = "Username";
-        staffTable.tHead.rows[0].insertBefore(usernameHeader, staffTable.tHead.rows[0].cells[1]);
-        staffUsers.forEach(user => {
-          const row = Array.from(staffTable.tBodies[0].rows).find(item => item.cells[1].textContent === user.email);
-          if (row) row.insertCell(1).textContent = user.username;
-        });
+        const roleSelect = staffFormForUsername.querySelector('select[name="role"]');
+        const ageGroupField = document.getElementById("member-age-group-field");
+        const ageGroupSelect = ageGroupField.querySelector('select[name="ageGroup"]');
+        const updateAgeGroupField = () => {
+          const isMember = roleSelect.value === "Member";
+          ageGroupField.hidden = !isMember;
+          ageGroupSelect.disabled = !isMember;
+          ageGroupSelect.required = isMember;
+        };
+        roleSelect.addEventListener("change", updateAgeGroupField);
+        updateAgeGroupField();
       }
-      const staffPasswordInput = document.querySelector('#staff-form input[name="password"]');
-      if (staffPasswordInput) staffPasswordInput.minLength = 8;
-      const financeOption = Array.from(document.querySelectorAll('#staff-form select[name="role"] option')).find(option => option.value === "Finance");
-      if (financeOption) {
-        financeOption.value = "Financial Secretary";
-        financeOption.textContent = "Financial Secretary";
-      }
-      document.querySelectorAll("#page-content .table-scroll tbody tr td:nth-child(4)").forEach(cell => {
-        if (cell.textContent === "Finance") cell.textContent = "Financial Secretary";
-      });
-      document.querySelectorAll("#page-content .detail-list > li > span").forEach(label => {
-        if (label.firstChild?.textContent.trim() === "Finance") label.firstChild.textContent = "Financial Secretary";
-      });
       const attendanceForm = document.getElementById("attendance-form");
       if (attendanceForm) attendanceForm.addEventListener("submit", async event => {
         event.preventDefault();
@@ -599,20 +641,28 @@
         } catch (error) { setNotice(error.message); }
       });
       const duesForm = document.getElementById("dues-form");
-      if (duesForm) duesForm.addEventListener("submit", async event => {
-        event.preventDefault();
-        try {
-          const record = Object.fromEntries(new FormData(duesForm));
-          await api("/dues", { method: "POST", body: JSON.stringify({
-            memberId: record.memberId,
-            amountPaid: Number(record.amountPaid),
-            expectedDues: Number(record.expectedDues)
-          }) });
-          dues = await api("/dues");
-          setNotice("Dues payment saved.");
-          renderPage();
-        } catch (error) { setNotice(error.message); }
-      });
+      if (duesForm) {
+        const memberSelect = duesForm.querySelector('select[name="memberId"]');
+        const expectedInput = duesForm.querySelector('input[name="expectedDues"]');
+        memberSelect.addEventListener("change", () => {
+          expectedInput.value = memberSelect.selectedOptions[0]?.dataset.monthlyDues || "20";
+        });
+        duesForm.addEventListener("submit", async event => {
+          event.preventDefault();
+          try {
+            const record = Object.fromEntries(new FormData(duesForm));
+            await api("/dues", { method: "POST", body: JSON.stringify({
+              memberId: record.memberId,
+              month: record.month,
+              amountPaid: Number(record.amountPaid),
+              expectedDues: Number(record.expectedDues)
+            }) });
+            dues = await api("/dues");
+            setNotice("Dues payment saved.");
+            renderPage();
+          } catch (error) { setNotice(error.message); }
+        });
+      }
       const transactionForm = document.getElementById("transaction-form");
       if (transactionForm) transactionForm.addEventListener("submit", async event => {
         event.preventDefault();
@@ -654,7 +704,7 @@
         });
         let empty = document.getElementById("member-empty");
         if (!visible && !empty) {
-          empty = document.createElement("tr"); empty.id = "member-empty"; empty.innerHTML = '<td class="empty-state" colspan="4">No matching members.</td>';
+          empty = document.createElement("tr"); empty.id = "member-empty"; empty.innerHTML = '<td class="empty-state" colspan="7">No matching members.</td>';
           document.getElementById("member-rows").append(empty);
         } else if (visible && empty) empty.remove();
       });

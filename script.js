@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const path = require("node:path");
+const os = require("node:os");
 const express = require("express");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
@@ -11,7 +12,10 @@ const rateLimit = require("express-rate-limit");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
-const roles = ["Admin", "Secretary", "Financial Secretary", "Treasurer"];
+const roles = ["Admin", "Secretary", "Financial Secretary", "Treasurer", "Member"];
+const maritalStatuses = ["Single", "Married", "Divorced", "Widowed", "Prefer not to say"];
+const memberAgeGroups = ["Below 20", "20 or above"];
+const legacyMemberAgeGroups = ["20 or under", "Over 20"];
 if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
 
 const userSchema = new mongoose.Schema({
@@ -20,11 +24,16 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   passwordHash: { type: String, required: true },
   role: { type: String, required: true, enum: roles },
+  memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", default: null },
   active: { type: Boolean, default: true }
 }, { timestamps: true });
 const memberSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, maxlength: 100 },
   email: { type: String, trim: true, lowercase: true, maxlength: 180, default: "" },
+  age: { type: Number, min: 0, max: 120, default: null },
+  ageGroup: { type: String, enum: [...memberAgeGroups, ...legacyMemberAgeGroups, ""], default: "" },
+  maritalStatus: { type: String, enum: [...maritalStatuses, ""], default: "" },
+  contact: { type: String, trim: true, maxlength: 30, default: "" },
   group: { type: String, trim: true, maxlength: 80, default: "General" },
   status: { type: String, enum: ["Active", "Pending", "Inactive"], default: "Active" },
   joined: { type: Date, default: Date.now }
@@ -60,7 +69,8 @@ const transactionSchema = new mongoose.Schema({
 const dueSchema = new mongoose.Schema({
   memberId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true },
   memberName: { type: String, required: true, trim: true, maxlength: 100 },
-  expectedDues: { type: Number, required: true, min: 0, default: 100 },
+  month: { type: String, match: /^\d{4}-(0[1-9]|1[0-2])$/ },
+  expectedDues: { type: Number, required: true, min: 0, default: 20 },
   amountPaid: { type: Number, required: true, min: 0, default: 0 },
   status: { type: String, required: true, enum: ["Paid", "Partial", "Owing"], default: "Owing" },
   lastPaid: { type: Date, default: null },
@@ -74,6 +84,17 @@ const Announcement = mongoose.model("Announcement", announcementSchema);
 const Event = mongoose.model("Event", eventSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 const Due = mongoose.model("Due", dueSchema);
+
+function memberDuesAmount(member) {
+  return memberAgeGroup(member) === "Below 20" ? 10 : 20;
+}
+
+function memberAgeGroup(member) {
+  if (Number.isInteger(member.age)) return member.age < 20 ? "Below 20" : "20 or above";
+  if (member.ageGroup === "20 or under") return "Below 20";
+  if (member.ageGroup === "Over 20") return "20 or above";
+  return member.ageGroup || "";
+}
 
 app.disable("x-powered-by");
 app.use(helmet({
@@ -94,7 +115,7 @@ app.use(session({
 }));
 
 function safeUser(user) {
-  return { id: user.id, username: user.username, name: user.name, email: user.email, role: user.role };
+  return { id: user.id, username: user.username, name: user.name, email: user.email, role: user.role, memberId: user.memberId ? String(user.memberId) : null };
 }
 
 function asyncRoute(handler) {
@@ -158,10 +179,20 @@ app.post("/api/auth/logout", requireAuth, asyncRoute(async (req, res) => {
   res.clearCookie("church-office.sid", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" });
   res.status(204).end();
 }));
-app.get("/api/auth/me", requireAuth, (req, res) => res.json({ user: safeUser(req.user) }));
+app.get("/api/auth/me", requireAuth, asyncRoute(async (req, res) => {
+  const user = safeUser(req.user);
+  if (req.user.role === "Member" && req.user.memberId) {
+    const member = await Member.findById(req.user.memberId).select("age ageGroup");
+    if (member) {
+      user.ageGroup = memberAgeGroup(member) || "20 or above";
+      user.monthlyDues = memberDuesAmount(member);
+    }
+  }
+  res.json({ user });
+}));
 
 app.get("/api/users", requireAuth, allowRoles("Admin"), asyncRoute(async (req, res) => {
-  const users = await User.find().select("username name email role active createdAt").sort({ name: 1 }).lean();
+  const users = await User.find().select("username name email role memberId active createdAt").sort({ name: 1 }).lean();
   res.json(users.map(user => ({ ...user, id: String(user._id) })));
 }));
 app.post("/api/users", requireAuth, allowRoles("Admin"), asyncRoute(async (req, res) => {
@@ -170,12 +201,36 @@ app.post("/api/users", requireAuth, allowRoles("Admin"), asyncRoute(async (req, 
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
   const role = String(req.body.role || "");
+  const ageGroup = String(req.body.ageGroup || "");
   if (!/^[a-z0-9._-]{3,32}$/.test(username) || name.length < 2 || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || !roles.includes(role)) return res.status(400).json({ error: "Provide a valid username, name, email, role, and password of at least 8 characters." });
-  res.status(201).json(safeUser(await User.create({ username, name, email, passwordHash: await bcrypt.hash(password, 12), role })));
+  let linkedMember = null;
+  if (role === "Member") {
+    if (!memberAgeGroups.includes(ageGroup)) return res.status(400).json({ error: "Select whether the member is below 20 or 20 or above." });
+    linkedMember = await Member.findOne({ email });
+    if (!linkedMember) return res.status(404).json({ error: "No directory member matches this email address. Add the member with this email first." });
+    if (await User.exists({ memberId: linkedMember._id })) return res.status(409).json({ error: "A login is already linked to that member." });
+    if (memberAgeGroup(linkedMember) && memberAgeGroup(linkedMember) !== ageGroup) {
+      return res.status(400).json({ error: "The selected age group does not match the member's age group in the directory." });
+    }
+  }
+  const user = await User.create({
+    username, name, email, passwordHash: await bcrypt.hash(password, 12), role,
+    memberId: linkedMember ? linkedMember._id : null
+  });
+  if (linkedMember) {
+    try {
+      linkedMember.ageGroup = ageGroup;
+      await linkedMember.save();
+    } catch (error) {
+      await User.deleteOne({ _id: user._id });
+      throw error;
+    }
+  }
+  res.status(201).json(safeUser(user));
 }));
 app.patch("/api/users/:id", requireAuth, allowRoles("Admin"), asyncRoute(async (req, res) => {
   const user = await User.findById(req.params.id);
-  if (!user) return res.status(404).json({ error: "Staff account not found." });
+  if (!user) return res.status(404).json({ error: "User account not found." });
   if (String(user._id) === String(req.user._id)) return res.status(400).json({ error: "You cannot change your own account here." });
   if (typeof req.body.active !== "boolean") return res.status(400).json({ error: "Provide an active status." });
   if (!req.body.active && user.role === "Admin" && await User.countDocuments({ role: "Admin", active: true }) <= 1) return res.status(400).json({ error: "The last active Admin cannot be disabled." });
@@ -184,21 +239,36 @@ app.patch("/api/users/:id", requireAuth, allowRoles("Admin"), asyncRoute(async (
   res.json({ id: user.id, name: user.name, email: user.email, role: user.role, active: user.active });
 }));
 
-app.get("/api/members", requireAuth, allowRoles("Admin", "Secretary", "Financial Secretary"), asyncRoute(async (req, res) => res.json(await Member.find().sort({ name: 1 }).lean())));
+app.get("/api/members", requireAuth, allowRoles("Admin", "Secretary", "Financial Secretary", "Treasurer"), asyncRoute(async (req, res) => {
+  const members = await Member.find().sort({ name: 1 }).lean();
+  const membersWithDues = members.map(member => ({ ...member, ageGroup: memberAgeGroup(member), monthlyDues: memberDuesAmount(member) }));
+  if (req.user.role !== "Admin" && req.user.role !== "Secretary") {
+    return res.json(membersWithDues.map(({ age, ageGroup, maritalStatus, contact, ...member }) => member));
+  }
+  res.json(membersWithDues.map(({ age, ...member }) => member));
+}));
 app.post("/api/members", requireAuth, allowRoles("Admin", "Secretary"), asyncRoute(async (req, res) => {
   const name = String(req.body.name || "").trim();
   const email = String(req.body.email || "").trim().toLowerCase();
+  const ageGroup = String(req.body.ageGroup || "");
+  const maritalStatus = String(req.body.maritalStatus || "");
+  const contact = String(req.body.contact || "").trim();
   const group = String(req.body.group || "General").trim();
-  if (name.length < 2 || email.length > 180 || group.length > 80) return res.status(400).json({ error: "Enter a valid member name, email, and ministry." });
-  res.status(201).json(await Member.create({ name, email, group }));
+  if (name.length < 2 || email.length > 180 || !memberAgeGroups.includes(ageGroup) || (maritalStatus !== "" && !maritalStatuses.includes(maritalStatus)) || contact.length > 30 || group.length > 80) {
+    return res.status(400).json({ error: "Enter a valid member name, age group, marital status, contact, email, and ministry." });
+  }
+  res.status(201).json(await Member.create({ name, email, ageGroup, maritalStatus, contact, group }));
 }));
 
-app.get("/api/dues", requireAuth, allowRoles("Admin", "Financial Secretary", "Treasurer"), asyncRoute(async (req, res) => {
-  const dues = await Due.find().sort({ memberName: 1 }).lean();
+app.get("/api/dues", requireAuth, allowRoles("Admin", "Financial Secretary", "Treasurer", "Member"), asyncRoute(async (req, res) => {
+  if (req.user.role === "Member" && !req.user.memberId) return res.status(403).json({ error: "This member login is not linked to a church member record." });
+  const filter = req.user.role === "Member" ? { memberId: req.user.memberId } : {};
+  const dues = await Due.find(filter).sort({ month: -1, memberName: 1 }).lean();
   res.json(dues.map(item => ({
     id: String(item._id),
     memberId: String(item.memberId),
     memberName: item.memberName,
+    month: item.month || null,
     expectedDues: Number(item.expectedDues || 0),
     amountPaid: Number(item.amountPaid || 0),
     status: item.status,
@@ -209,20 +279,21 @@ app.get("/api/dues", requireAuth, allowRoles("Admin", "Financial Secretary", "Tr
 app.post("/api/dues", requireAuth, allowRoles("Admin", "Financial Secretary", "Treasurer"), asyncRoute(async (req, res) => {
   const memberId = String(req.body.memberId || "").trim();
   const amountPaid = Number(req.body.amountPaid);
-  const expectedDues = Number(req.body.expectedDues ?? 100);
-  if (!mongoose.Types.ObjectId.isValid(memberId) || !Number.isFinite(amountPaid) || amountPaid < 0 || !Number.isFinite(expectedDues) || expectedDues < 0) {
-    return res.status(400).json({ error: "Enter a valid member and a dues amount." });
+  const month = String(req.body.month || new Date().toISOString().slice(0, 7)).trim();
+  if (!mongoose.Types.ObjectId.isValid(memberId) || !Number.isFinite(amountPaid) || amountPaid < 0 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    return res.status(400).json({ error: "Enter a valid member, month, and dues amount." });
   }
   const member = await Member.findById(memberId);
   if (!member) return res.status(404).json({ error: "Member not found." });
-  let due = await Due.findOne({ memberId });
+  const expectedDues = memberDuesAmount(member);
+  let due = await Due.findOne({ memberId, month });
   if (!due) {
-    due = new Due({ memberId, memberName: member.name, expectedDues, amountPaid, status: "Owing", lastPaid: new Date(), recordedBy: req.user._id });
+    due = new Due({ memberId, memberName: member.name, month, expectedDues, amountPaid, status: "Owing", lastPaid: amountPaid > 0 ? new Date() : null, recordedBy: req.user._id });
   } else {
     due.memberName = member.name;
     due.expectedDues = expectedDues;
     due.amountPaid = Number(due.amountPaid) + amountPaid;
-    due.lastPaid = new Date();
+    if (amountPaid > 0) due.lastPaid = new Date();
     due.recordedBy = req.user._id;
   }
   due.status = due.amountPaid >= due.expectedDues ? "Paid" : due.amountPaid > 0 ? "Partial" : "Owing";
@@ -231,6 +302,7 @@ app.post("/api/dues", requireAuth, allowRoles("Admin", "Financial Secretary", "T
     id: String(due._id),
     memberId: String(due.memberId),
     memberName: due.memberName,
+    month: due.month || null,
     expectedDues: Number(due.expectedDues),
     amountPaid: Number(due.amountPaid),
     status: due.status,
@@ -310,7 +382,16 @@ async function start() {
     await User.create({ username, name, email, passwordHash: await bcrypt.hash(password, 12), role: "Admin" });
     console.log(`Created initial Admin account for ${email}.`);
   }
-  app.listen(port, () => console.log(`Kukurantumi Church Of Christ Youth is available at http://localhost:${port}`));
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`Kukurantumi Church Of Christ Youth is available at http://localhost:${port}`);
+    const lanAddresses = [...new Set(Object.values(os.networkInterfaces())
+      .flatMap(addresses => (addresses || [])
+        .filter(address => !address.internal && (address.family === "IPv4" || address.family === 4))
+        .map(address => address.address)))];
+    for (const address of lanAddresses) {
+      console.log(`Same-network access: http://${address}:${port}`);
+    }
+  });
 }
 
 if (require.main === module) start().catch(error => {
