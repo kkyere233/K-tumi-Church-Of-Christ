@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
-import logging
+import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from urllib.parse import urlparse
 
@@ -35,6 +38,10 @@ ROLES = ["Admin", "Secretary", "Financial Secretary", "Treasurer", "Member"]
 MARITAL_STATUSES = ["Single", "Married", "Divorced", "Widowed", "Prefer not to say"]
 MEMBER_AGE_GROUPS = ["Below 20", "20 or above"]
 LEGACY_MEMBER_AGE_GROUPS = ["20 or under", "Over 20"]
+LOGIN_RATE_LIMIT = 10
+LOGIN_RATE_WINDOW_SECONDS = 15 * 60
+_login_attempts: dict[str, deque[float]] = {}
+_login_attempts_lock = Lock()
 
 app = FastAPI(title="Kukurantumi Church Of Christ Youth Dashboard")
 app.add_middleware(
@@ -128,6 +135,39 @@ async def ensure_same_origin(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Request origin is not allowed.")
 
 
+def enforce_login_rate_limit(request: Request) -> None:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if TRUST_PROXY and forwarded_for:
+        client_ip = forwarded_for.split(",")[-1].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+
+    now = time.monotonic()
+    window_start = now - LOGIN_RATE_WINDOW_SECONDS
+    with _login_attempts_lock:
+        attempts = _login_attempts.setdefault(client_ip, deque())
+        while attempts and attempts[0] <= window_start:
+            attempts.popleft()
+        if len(attempts) >= LOGIN_RATE_LIMIT:
+            retry_after = max(1, int(attempts[0] + LOGIN_RATE_WINDOW_SECONDS - now + 0.999))
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts. Please try again later.",
+                headers={
+                    "Retry-After": str(retry_after),
+                    "RateLimit-Limit": str(LOGIN_RATE_LIMIT),
+                    "RateLimit-Remaining": "0",
+                    "RateLimit-Reset": str(retry_after),
+                    "RateLimit-Policy": f"{LOGIN_RATE_LIMIT};w={LOGIN_RATE_WINDOW_SECONDS}",
+                },
+            )
+        attempts.append(now)
+
+        expired_clients = [ip for ip, entries in _login_attempts.items() if not entries or entries[-1] <= window_start]
+        for ip in expired_clients:
+            del _login_attempts[ip]
+
+
 @app.middleware("http")
 async def origin_guard(request: Request, call_next):
     if request.url.path.startswith("/api"):
@@ -210,6 +250,7 @@ async def get_me(request: Request) -> dict[str, Any]:
 
 @app.post("/api/auth/login")
 async def login(request: Request) -> dict[str, Any]:
+    enforce_login_rate_limit(request)
     payload = await request.json()
     username = str(payload.get("username", "")).strip().lower()
     password = str(payload.get("password", ""))
@@ -606,7 +647,7 @@ async def create_transaction(request: Request) -> dict[str, Any]:
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail}, headers=exc.headers)
 
 
 @app.exception_handler(Exception)
