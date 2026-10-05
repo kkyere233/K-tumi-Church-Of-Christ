@@ -5,10 +5,12 @@
   "description": "Church office dashboard with role-based access and MongoDB persistence",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
+    "start": "python main.py",
+    "dev": "python -m uvicorn main:app --reload",
+    "start:node": "node server.js",
+    "dev:node": "node --watch server.js",
     "build:netlify": "node netlify-build.js",
-    "check": "node --check server.js && node --check script.js && node --check reset-admin-password.js && node --check netlify-build.js",
+    "check": "python -m compileall -q main.py && node --check server.js && node --check script.js && node --check reset-admin-password.js && node --check netlify-build.js",
     "reset:admin": "node reset-admin-password.js"
   },
   "engines": {

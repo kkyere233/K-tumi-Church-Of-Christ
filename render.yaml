@@ -1,11 +1,11 @@
 services:
   - type: web
     name: ktumi-church-youth
-    runtime: node
+    runtime: python
     plan: free
-    buildCommand: npm ci
-    startCommand: npm start
-    healthCheckPath: /
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
