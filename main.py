@@ -70,6 +70,23 @@ def get_db():
     return get_client()[get_database_name()]
 
 
+def ensure_database_collections() -> None:
+    db = get_db()
+    existing_collections = set(db.list_collection_names())
+    required_collections = (
+        "users",
+        "members",
+        "attendances",
+        "announcements",
+        "events",
+        "transactions",
+        "dues",
+    )
+    for collection_name in required_collections:
+        if collection_name not in existing_collections:
+            db.create_collection(collection_name)
+
+
 def serialize_value(value: Any) -> Any:
     if isinstance(value, ObjectId):
         return str(value)
@@ -184,9 +201,10 @@ def startup_event() -> None:
     if len(SESSION_SECRET) < 32:
         raise RuntimeError("SESSION_SECRET must contain at least 32 characters.")
     get_client().admin.command("ping")
-    get_db()
-    get_db().users.create_index("username", unique=True, sparse=True)
-    get_db().users.create_index("email", unique=True)
+    ensure_database_collections()
+    db = get_db()
+    db.users.create_index("username", unique=True, sparse=True)
+    db.users.create_index("email", unique=True)
     maybe_create_bootstrap_admin()
 
 
@@ -501,7 +519,7 @@ async def list_attendance(request: Request) -> list[dict[str, Any]]:
     user = await get_authenticated_user(request)
     if user.get("role") not in {"Admin", "Secretary"}:
         raise HTTPException(status_code=403, detail="You do not have permission to do that.")
-    rows = list(get_db().attendance.find().sort([("date", -1), ("createdAt", -1)]).limit(250))
+    rows = list(get_db().attendances.find().sort([("date", -1), ("createdAt", -1)]).limit(250))
     return serialize_value(rows)
 
 
@@ -528,7 +546,7 @@ async def create_attendance(request: Request) -> dict[str, Any]:
         "createdAt": datetime.now(timezone.utc),
         "updatedAt": datetime.now(timezone.utc),
     }
-    result = get_db().attendance.insert_one(inserted)
+    result = get_db().attendances.insert_one(inserted)
     inserted["_id"] = result.inserted_id
     return serialize_value(inserted)
 
