@@ -74,7 +74,13 @@
       button.disabled = true;
       try {
         const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-        const result = await response.json();
+        const responseText = await response.text();
+        let result;
+        try {
+          result = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          throw new Error(`The server returned an unexpected response (HTTP ${response.status}). Check the backend URL and deployment.`);
+        }
         if (!response.ok) throw new Error(result.error || "Unable to sign in.");
         location.replace("/dashboard");
       } catch (error) {
