@@ -4,7 +4,9 @@ import logging
 import os
 import re
 import time
+from collections.abc import AsyncGenerator
 from collections import deque
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -43,7 +45,24 @@ LOGIN_RATE_WINDOW_SECONDS = 15 * 60
 _login_attempts: dict[str, deque[float]] = {}
 _login_attempts_lock = Lock()
 
-app = FastAPI(title="Kukurantumi Church Of Christ Youth Dashboard")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+    if len(SESSION_SECRET) < 32:
+        raise RuntimeError("SESSION_SECRET must contain at least 32 characters.")
+    get_client().admin.command("ping")
+    ensure_database_collections()
+    db = get_db()
+    db.users.create_index("username", unique=True, sparse=True)
+    db.users.create_index("email", unique=True)
+    maybe_create_bootstrap_admin()
+    yield
+
+
+app = FastAPI(
+    title="Kukurantumi Church Of Christ Youth Dashboard",
+    lifespan=lifespan,
+)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
@@ -194,18 +213,6 @@ async def origin_guard(request: Request, call_next):
             return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
     response = await call_next(request)
     return response
-
-
-@app.on_event("startup")
-def startup_event() -> None:
-    if len(SESSION_SECRET) < 32:
-        raise RuntimeError("SESSION_SECRET must contain at least 32 characters.")
-    get_client().admin.command("ping")
-    ensure_database_collections()
-    db = get_db()
-    db.users.create_index("username", unique=True, sparse=True)
-    db.users.create_index("email", unique=True)
-    maybe_create_bootstrap_admin()
 
 
 def maybe_create_bootstrap_admin() -> None:
@@ -664,12 +671,12 @@ async def create_transaction(request: Request) -> dict[str, Any]:
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
+async def http_exception_handler(_: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"error": exc.detail}, headers=exc.headers)
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
+async def general_exception_handler(_: Request, exc: Exception):
     if isinstance(exc, DuplicateKeyError):
         return JSONResponse(status_code=409, content={"error": "That username or email address is already in use."})
     if "Validation" in exc.__class__.__name__ or "Cast" in exc.__class__.__name__:
