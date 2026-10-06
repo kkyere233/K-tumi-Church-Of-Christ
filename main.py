@@ -29,7 +29,7 @@ load_dotenv(BASE_DIR / ".env")
 PORT = int(os.getenv("PORT", "3000"))
 NODE_ENV = os.getenv("NODE_ENV", "development")
 TRUST_PROXY = os.getenv("TRUST_PROXY", "0") == "1"
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/church_office")
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip() or "mongodb://127.0.0.1:27017/church_office"
 SESSION_SECRET = os.getenv("SESSION_SECRET", "")
 ALLOWED_ORIGINS = {
     origin.strip()
@@ -50,6 +50,11 @@ _login_attempts_lock = Lock()
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     if len(SESSION_SECRET) < 32:
         raise RuntimeError("SESSION_SECRET must contain at least 32 characters.")
+    if NODE_ENV == "production":
+        if not os.getenv("MONGODB_URI", "").strip():
+            raise RuntimeError("Set MONGODB_URI to a remotely reachable MongoDB connection string in production.")
+        if urlparse(MONGODB_URI).hostname in {"localhost", "127.0.0.1", "::1"}:
+            raise RuntimeError("MONGODB_URI must point to a remotely reachable MongoDB instance in production, not localhost.")
     get_client().admin.command("ping")
     ensure_database_collections()
     db = get_db()

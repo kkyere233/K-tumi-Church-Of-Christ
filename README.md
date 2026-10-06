@@ -58,11 +58,12 @@ Both computers must be on the same non-guest Wi-Fi network, and the host compute
 
 Netlify serves the frontend, while Render runs the Python API; Netlify proxies `/api` and `/health` requests to Render so browser requests and session cookies stay on the Netlify site origin.
 
-1. Deploy the Render backend from this repository using `render.yaml`. Set its `MONGODB_URI`, bootstrap Admin values, and generated `SESSION_SECRET`. Keep `NODE_ENV=production` and `TRUST_PROXY=1`. Note the deployed backend origin, such as `https://your-service.onrender.com`.
-2. In Netlify, import the same GitHub repository. The included `netlify.toml` sets the build command and publish directory. Add the build environment variable `RENDER_BACKEND_URL` with the Render backend origin only, for example `https://your-service.onrender.com` (no path).
-3. Deploy the Netlify site and note its primary origin, for example `https://your-site.netlify.app`.
-4. In the Render service environment, set `ALLOWED_ORIGINS` to the exact Netlify origin, including `https://`. For a custom domain, include both origins separated by a comma. Redeploy Render after changing this setting.
-5. Visit the Netlify site's `/health` route and confirm it returns `{"status":"ok"}`. Then sign in and verify that the dashboard loads and data can be read and saved.
+1. Create a MongoDB Atlas cluster and database user. In Atlas **Network Access**, allow connections from Render. If your Render service does not have fixed outbound IPs, Atlas may require `0.0.0.0/0`; use a strong database-user password and grant access only to the app database. Copy Atlas's `mongodb+srv://` connection string and replace its placeholders, URL-encoding special characters in the username or password if needed. Do not use a localhost URI or commit this credential.
+2. Deploy the Render backend from this repository using `render.yaml`. In the Render service's environment settings, set `MONGODB_URI` to that Atlas connection string, along with the bootstrap Admin values and generated `SESSION_SECRET`. Keep `NODE_ENV=production` and `TRUST_PROXY=1`. The app verifies MongoDB connectivity during startup and rejects localhost URIs in production. Note the deployed backend origin, such as `https://your-service.onrender.com`.
+3. In Netlify, import the same GitHub repository. The included `netlify.toml` sets the build command and publish directory. Add the build environment variable `RENDER_BACKEND_URL` with the Render backend origin only, for example `https://your-service.onrender.com` (no path).
+4. Deploy the Netlify site and note its primary origin, for example `https://your-site.netlify.app`.
+5. In the Render service environment, set `ALLOWED_ORIGINS` to the exact Netlify origin, including `https://`. For a custom domain, include both origins separated by a comma. Redeploy Render after changing this setting.
+6. Visit the Netlify site's `/health` route and confirm it returns `{"status":"ok"}`. Then sign in and verify that the dashboard loads and data can be read and saved.
 
 The Netlify build intentionally fails when `RENDER_BACKEND_URL` is missing or is not an HTTPS origin. Do not publish the repository root as a static site; the build copies only the login page, dashboard, and logo assets into `dist`.
 
