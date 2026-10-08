@@ -1,8 +1,14 @@
 # Kukurantumi Church Of Christ Youth Dashboard
 
-The login page, dashboard, backend API, and MongoDB storage run together as one application. Do not open `COC jct.html` directly from File Explorer; the server serves it at `/dashboard` only after sign-in.
+The login page, dashboard, backend API, and MongoDB storage run together as one application. Do not open `frontend/COC jct.html` directly from File Explorer; the server serves it at `/dashboard` only after sign-in.
 
 The active backend is Python with FastAPI and MongoDB. The original Node.js/Express backend is retained as a legacy option.
+
+## Project layout
+
+- `frontend/` contains the login page, dashboard, and browser assets.
+- `backend/` contains the Python API, the legacy Node.js API, backend utilities, and Python dependencies.
+- Root-level files contain shared project and deployment configuration.
 
 ## Requirements
 
@@ -18,7 +24,7 @@ The active backend is Python with FastAPI and MongoDB. The original Node.js/Expr
    py -3.12 -m venv .venv
    .\.venv\Scripts\Activate.ps1
    python -m pip install --upgrade pip
-   python -m pip install -r requirements.txt
+   python -m pip install -r backend/requirements.txt
    ```
 
 2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a unique `SESSION_SECRET` of at least 32 characters, and the first Admin's username, name, email, and unique password of at least 8 characters. `.env` is excluded from Git.
@@ -26,7 +32,7 @@ The active backend is Python with FastAPI and MongoDB. The original Node.js/Expr
 3. Start the Python app:
 
    ```powershell
-   python main.py
+   python backend/main.py
    ```
 
 4. Open `http://localhost:3000`. The first run creates the bootstrap Admin account from the `.env` settings. Sign in with the configured username. Admin can create staff and Member accounts and assign roles in **Settings**. A Member login is automatically linked to the directory record with the same email address, so create the member record with that email first.
@@ -44,7 +50,7 @@ npm run start:node
 
 ## Open from another laptop on the same Wi-Fi
 
-Keep the app running on the host computer with `python main.py`. Use the URL `http://<host-ip>:3000` on the other laptop, for example `http://192.168.0.129:3000`. Do not use `localhost` on the other laptop; that refers to the other laptop itself.
+Keep the app running on the host computer with `python backend/main.py`. Use the URL `http://<host-ip>:3000` on the other laptop, for example `http://192.168.0.129:3000`. Do not use `localhost` on the other laptop; that refers to the other laptop itself.
 
 If the address does not load, allow inbound TCP port 3000 on the host computer's private network. In PowerShell opened as Administrator, run:
 
@@ -65,7 +71,7 @@ Netlify serves the frontend, while Render runs the Python API; Netlify proxies `
 5. In the Render service environment, set `ALLOWED_ORIGINS` to the exact Netlify origin, including `https://`. For a custom domain, include both origins separated by a comma. Redeploy Render after changing this setting.
 6. Visit the Netlify site's `/health` route and confirm it returns `{"status":"ok"}`. Then sign in and verify that the dashboard loads and data can be read and saved.
 
-The Netlify build intentionally fails when `RENDER_BACKEND_URL` is missing or is not an HTTPS origin. Do not publish the repository root as a static site; the build copies only the login page, dashboard, and logo assets into `dist`.
+The Netlify build intentionally fails when `RENDER_BACKEND_URL` is missing or is not an HTTPS origin. Do not publish the repository root as a static site; the build copies only the login page, dashboard, and logo assets from `frontend/` into `dist`.
 
 The Render blueprint uses its free plan, which may sleep when idle. Netlify's proxy has a 26-second request timeout, so a cold start may make the first login or API request time out. Use an always-on Render plan if this happens or if reliable immediate access is important. Netlify deploy-preview URLs are not automatically allowed; add an exact preview origin to Render's `ALLOWED_ORIGINS` if you need to test a preview.
 

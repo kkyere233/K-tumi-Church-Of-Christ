@@ -19,10 +19,11 @@ async function build() {
   await fs.rm(output, { recursive: true, force: true });
   await fs.mkdir(path.join(output, "dashboard"), { recursive: true });
   await fs.mkdir(path.join(output, "assets"), { recursive: true });
-  await fs.copyFile(path.join(__dirname, "login.html"), path.join(output, "index.html"));
-  await fs.copyFile(path.join(__dirname, "COC jct.html"), path.join(output, "dashboard", "index.html"));
+  const frontend = path.join(__dirname, "frontend");
+  await fs.copyFile(path.join(frontend, "login.html"), path.join(output, "index.html"));
+  await fs.copyFile(path.join(frontend, "COC jct.html"), path.join(output, "dashboard", "index.html"));
   await Promise.all(["church-logo.svg", "church-logo-dark.svg"].map(file =>
-    fs.copyFile(path.join(__dirname, "assets", file), path.join(output, "assets", file))
+    fs.copyFile(path.join(frontend, "assets", file), path.join(output, "assets", file))
   ));
   await fs.writeFile(path.join(output, "_redirects"), [
     `/api/* ${backend.origin}/api/:splat 200`,

@@ -24,7 +24,9 @@ from pymongo.errors import DuplicateKeyError
 from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+PROJECT_DIR = BASE_DIR.parent
+FRONTEND_DIR = PROJECT_DIR / "frontend"
+load_dotenv(PROJECT_DIR / ".env")
 
 PORT = int(os.getenv("PORT", "3000"))
 NODE_ENV = os.getenv("NODE_ENV", "development")
@@ -75,7 +77,7 @@ app.add_middleware(
     https_only=NODE_ENV == "production",
     max_age=8 * 60 * 60,
 )
-app.mount("/assets", StaticFiles(directory=str(BASE_DIR / "assets")), name="assets")
+app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 
 
 def get_database_name() -> str:
@@ -252,18 +254,18 @@ def health() -> dict[str, str]:
 
 @app.get("/")
 def login_page() -> FileResponse:
-    return FileResponse(BASE_DIR / "login.html")
+    return FileResponse(FRONTEND_DIR / "login.html")
 
 
 @app.get("/login")
 def login_page_alias() -> FileResponse:
-    return FileResponse(BASE_DIR / "login.html")
+    return FileResponse(FRONTEND_DIR / "login.html")
 
 
 @app.get("/dashboard")
 async def dashboard_page(request: Request) -> FileResponse:
     await get_authenticated_user(request)
-    return FileResponse(BASE_DIR / "COC jct.html")
+    return FileResponse(FRONTEND_DIR / "COC jct.html")
 
 
 @app.get("/api/auth/me")

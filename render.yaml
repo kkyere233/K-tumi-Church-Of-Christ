@@ -3,8 +3,8 @@ services:
     name: ktumi-church-youth
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/main.py
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
